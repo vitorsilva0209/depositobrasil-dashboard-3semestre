@@ -1,4 +1,3 @@
-
 import { useEffect, useState } from "react";
 import "./App.css";
 
@@ -12,18 +11,28 @@ type Usuario = {
   usuarioId?: number;
 };
 
-function validarEmail(email: string) {
+type RespostaAPI = {
+  token?: string;
+  accessToken?: string;
+  mensagem?: string;
+  message?: string;
+  erro?: string;
+  usuario?: Usuario;
+  [chave: string]: any;
+};
+
+function validarEmail(email: string): boolean {
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
 }
 
-function validarCPF(cpf: string) {
+function validarCPF(cpf: string): boolean {
   const numero = cpf.replace(/\D/g, "");
 
   if (numero.length !== 11 || /^(\d)\1{10}$/.test(numero)) {
     return false;
   }
 
-  const calcularDigito = (base: string, pesoInicial: number) => {
+  const calcularDigito = (base: string, pesoInicial: number): number => {
     let soma = 0;
 
     for (let i = 0; i < base.length; i++) {
@@ -40,7 +49,7 @@ function validarCPF(cpf: string) {
   );
 }
 
-function validarSenha(senha: string) {
+function validarSenha(senha: string): boolean {
   return (
     senha.length >= 8 &&
     /[A-Z]/.test(senha) &&
@@ -54,7 +63,7 @@ async function requisicaoAPI(
   rota: string,
   dados?: Record<string, string>,
   token?: string
-) {
+): Promise<RespostaAPI> {
   let resposta: Response;
 
   try {
@@ -72,7 +81,7 @@ async function requisicaoAPI(
     );
   }
 
-  const resultado = await resposta.json().catch(() => ({}));
+  const resultado: RespostaAPI = await resposta.json().catch(() => ({}));
 
   if (!resposta.ok) {
     throw new Error(
@@ -105,11 +114,20 @@ function App() {
 
   useEffect(() => {
     const token = localStorage.getItem("token");
+
     if (!token) return;
 
     requisicaoAPI("/api/protegido", undefined, token)
       .then((dados) => {
-        setUsuario(dados.usuario ?? dados);
+        if (dados.usuario && typeof dados.usuario === "object") {
+  setUsuario({
+    id: dados.usuario.id,
+    nome: dados.usuario.nome,
+    usuarioId: dados.usuario.usuarioId,
+  });
+} else {
+  setUsuario(null);
+}
         setTela("dashboard");
       })
       .catch(() => {
@@ -130,7 +148,13 @@ function App() {
     evento.preventDefault();
     informar("");
 
-    if (!nome.trim() || !email.trim() || !senha || !cpf.trim()) {
+    if (
+      !nome.trim() ||
+      !email.trim() ||
+      !senha ||
+      !confirmarSenha ||
+      !cpf.trim()
+    ) {
       informar("Preencha todos os campos obrigatórios.", true);
       return;
     }
@@ -147,7 +171,7 @@ function App() {
 
     if (!validarSenha(senha)) {
       informar(
-        "A senha precisa ter 8 caracteres, letra maiúscula, minúscula, número e símbolo.",
+        "A senha precisa ter pelo menos 8 caracteres, letra maiúscula, minúscula, número e símbolo.",
         true
       );
       return;
@@ -165,10 +189,12 @@ function App() {
         nome: nome.trim(),
         email: email.trim(),
         senha,
+        confirmarSenha,
         cpf: cpf.replace(/\D/g, ""),
       });
 
       const emailCadastrado = email.trim();
+
       limparFormulario();
       setEmail(emailCadastrado);
       setTela("login");
@@ -219,10 +245,16 @@ function App() {
           undefined,
           token
         );
-        setUsuario(protegido.usuario ?? protegido);
+
+        setUsuario(protegido.usuario ?? dados.usuario ?? null)
       } catch {
-        setUsuario(dados.usuario ?? null);
-      }
+  localStorage.removeItem("token");
+  setUsuario(null);
+
+  throw new Error(
+    "Não foi possível validar sua autenticação. Faça login novamente."
+  );
+}
 
       setSenha("");
       setTela("dashboard");
@@ -250,6 +282,7 @@ function App() {
       <section className="painel">
         <header className="cabecalho">
           <div className="marca">DB</div>
+
           <div>
             <h1>Depósito Brasil</h1>
             <p>Materiais de construção</p>
@@ -259,11 +292,16 @@ function App() {
         {tela === "login" && (
           <section className="conteudo">
             <span className="etiqueta">BEM-VINDO DE VOLTA</span>
+
             <h2>Entrar na sua conta</h2>
-            <p className="descricao">Acesse sua conta para continuar.</p>
+
+            <p className="descricao">
+              Acesse sua conta para continuar.
+            </p>
 
             <form onSubmit={entrar}>
               <label htmlFor="email">E-mail</label>
+
               <input
                 id="email"
                 type="email"
@@ -275,6 +313,7 @@ function App() {
               />
 
               <label htmlFor="senha">Senha</label>
+
               <input
                 id="senha"
                 type="password"
@@ -315,11 +354,16 @@ function App() {
         {tela === "cadastro" && (
           <section className="conteudo">
             <span className="etiqueta">NOVO CADASTRO</span>
+
             <h2>Crie sua conta</h2>
-            <p className="descricao">Preencha os dados para se cadastrar.</p>
+
+            <p className="descricao">
+              Preencha os dados para se cadastrar.
+            </p>
 
             <form onSubmit={cadastrar}>
               <label htmlFor="nome">Nome completo</label>
+
               <input
                 id="nome"
                 type="text"
@@ -331,6 +375,7 @@ function App() {
               />
 
               <label htmlFor="email-cadastro">E-mail</label>
+
               <input
                 id="email-cadastro"
                 type="email"
@@ -342,10 +387,12 @@ function App() {
               />
 
               <label htmlFor="cpf">CPF</label>
+
               <input
                 id="cpf"
                 type="text"
                 inputMode="numeric"
+                autoComplete="off"
                 placeholder="Somente números ou CPF formatado"
                 value={cpf}
                 onChange={(e) => setCpf(e.target.value)}
@@ -353,6 +400,7 @@ function App() {
               />
 
               <label htmlFor="senha-cadastro">Senha</label>
+
               <input
                 id="senha-cadastro"
                 type="password"
@@ -368,6 +416,7 @@ function App() {
               </small>
 
               <label htmlFor="confirmar-senha">Confirmar senha</label>
+
               <input
                 id="confirmar-senha"
                 type="password"
@@ -408,13 +457,16 @@ function App() {
         {tela === "dashboard" && (
           <section className="conteudo dashboard">
             <span className="etiqueta">ÁREA RESTRITA</span>
+
             <h2>Login realizado!</h2>
+
             <p className="descricao">
               Você está autenticado no Depósito Brasil.
             </p>
 
             <div className="cartao-bemvindo">
               <span className="icone">✓</span>
+
               <div>
                 <strong>{usuario?.nome ?? "Usuário autenticado"}</strong>
                 <p>Seu acesso foi autorizado.</p>

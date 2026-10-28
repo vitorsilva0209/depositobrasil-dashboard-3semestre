@@ -1,9 +1,9 @@
-
 import { Request, Response } from "express";
 import {
   registrarUsuario,
   autenticarUsuario
 } from "../services/authService";
+import jwt from "jsonwebtoken";
 
 export async function registrar(req: Request, res: Response) {
   try {
@@ -43,7 +43,12 @@ export async function login(req: Request, res: Response) {
     return res.status(200).json({
       sucesso: true,
       mensagem: "Login realizado com sucesso.",
-      usuario
+      token: usuario.token,
+      usuario: {
+        id: usuario.id,
+        nome: usuario.nome,
+        email: usuario.email
+      }
     });
   } catch (erro) {
     const mensagem =
