@@ -162,3 +162,5 @@ export async function autenticarUsuario(emailInformado: string, senha: string) {
     token: gerarToken(usuario.id, email)
   };
 }
+console.log("CPF informado:", "08431331984");
+console.log("CPF válido:", validarCPF("08431331984"));
