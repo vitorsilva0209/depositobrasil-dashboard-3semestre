@@ -24,19 +24,30 @@ try {
             "categoria" => $produto["categoria"],
             "preco" => (float)$produto["preco"],
             "estoque" => (int)$produto["estoque"],
-            "quantidadeVendida" =>
-                (int)$produto["quantidade_vendida"]
+            "quantidadeVendida" => (int)$produto["quantidade_vendida"]
         ];
     }
 
     $resultado->free();
 
     while ($conn->more_results()) {
-
         $conn->next_result();
 
         if ($resultado = $conn->store_result()) {
             $resultado->free();
+        }
+    }
+
+    $produtoMaisVendido = null;
+
+    foreach ($produtos as $produto) {
+
+        if (
+            $produtoMaisVendido === null ||
+            $produto["quantidadeVendida"] >
+            $produtoMaisVendido["quantidadeVendida"]
+        ) {
+            $produtoMaisVendido = $produto;
         }
     }
 
@@ -79,6 +90,7 @@ try {
     echo json_encode([
         "sucesso" => true,
         "produtos" => $produtos,
+        "produtoMaisVendido" => $produtoMaisVendido,
         "totalProdutos" => $totalProdutos,
         "totalClientes" => $totalClientes,
         "totalFuncionarios" => $totalFuncionarios

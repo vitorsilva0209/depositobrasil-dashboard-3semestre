@@ -49,9 +49,9 @@ $resProdutos = $conn->query("
 
         body {
             display: flex;
-            background: #f4f6f9;
+            background: #f4f6f95a;
             min-height: 100vh;
-            color: #333;
+            color: #ee0707;
         }
 
     

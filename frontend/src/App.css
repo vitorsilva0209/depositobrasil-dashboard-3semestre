@@ -1,0 +1,267 @@
+
+.app {
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 32px 16px;
+}
+
+.painel {
+  width: 100%;
+  max-width: 470px;
+  overflow: hidden;
+  background: #ffffff;
+  border: 1px solid #e5e7eb;
+  border-radius: 22px;
+  box-shadow: 0 24px 70px rgba(31, 41, 55, 0.12);
+}
+
+.cabecalho {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 26px 32px;
+  background: #242424;
+  color: white;
+  border-bottom: 4px solid #c62828;
+}
+
+.marca {
+  display: grid;
+  place-items: center;
+  width: 48px;
+  height: 48px;
+  flex-shrink: 0;
+  border-radius: 12px;
+  background: #c62828;
+  color: white;
+  font-size: 20px;
+  font-weight: 800;
+}
+
+.cabecalho h1 {
+  margin: 0;
+  font-size: 21px;
+  letter-spacing: -0.5px;
+}
+
+.cabecalho p {
+  margin: 4px 0 0;
+  color: #d1d5db;
+  font-size: 12px;
+}
+
+.conteudo {
+  padding: 32px;
+}
+
+.etiqueta {
+  color: #c62828;
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 1.5px;
+}
+
+.conteudo h2 {
+  margin: 10px 0 8px;
+  color: #202124;
+  font-size: 27px;
+  letter-spacing: -0.8px;
+}
+
+.descricao {
+  margin: 0 0 24px;
+  color: #6b7280;
+  font-size: 14px;
+  line-height: 1.6;
+}
+
+form {
+  display: flex;
+  flex-direction: column;
+  gap: 9px;
+}
+
+form label {
+  margin-top: 8px;
+  color: #333333;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+form input {
+  width: 100%;
+  min-width: 0;
+  padding: 13px 14px;
+  border: 1px solid #d1d5db;
+  border-radius: 9px;
+  background: #ffffff;
+  color: #222222;
+  font: inherit;
+  font-size: 14px;
+  outline: none;
+  transition: border-color 0.2s, box-shadow 0.2s;
+}
+
+form input:focus {
+  border-color: #c62828;
+  box-shadow: 0 0 0 3px rgba(198, 40, 40, 0.12);
+}
+
+form input::placeholder {
+  color: #9ca3af;
+}
+
+form button,
+.botao-secundario {
+  width: 100%;
+  margin-top: 14px;
+  padding: 14px;
+  border: none;
+  border-radius: 9px;
+  background: #c62828;
+  color: white;
+  font-size: 14px;
+  font-weight: 750;
+  cursor: pointer;
+  transition: background 0.2s, transform 0.2s;
+}
+
+form button:hover,
+.botao-secundario:hover {
+  background: #a91f1f;
+  transform: translateY(-1px);
+}
+
+form button:disabled {
+  cursor: wait;
+  opacity: 0.7;
+}
+
+.ajuda {
+  color: #6b7280;
+  font-size: 11px;
+  line-height: 1.5;
+}
+
+.mensagem {
+  padding: 11px 12px;
+  border-radius: 8px;
+  font-size: 13px;
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+}
+
+.erro {
+  border: 1px solid #fecaca;
+  background: #fef2f2;
+  color: #991b1b;
+}
+
+.sucesso {
+  border: 1px solid #bbf7d0;
+  background: #f0fdf4;
+  color: #166534;
+}
+
+.alternativa {
+  margin: 24px 0 0;
+  color: #6b7280;
+  text-align: center;
+  font-size: 13px;
+}
+
+.link {
+  padding: 0;
+  border: none;
+  background: transparent;
+  color: #b91c1c;
+  font: inherit;
+  font-weight: 750;
+  cursor: pointer;
+}
+
+.link:hover {
+  text-decoration: underline;
+}
+
+.dashboard {
+  min-height: 300px;
+}
+
+.cartao-bemvindo {
+  display: flex;
+  align-items: center;
+  gap: 13px;
+  margin-bottom: 22px;
+  padding: 17px;
+  border: 1px solid #e5e7eb;
+  border-radius: 12px;
+  background: #fafafa;
+  overflow-wrap: anywhere;
+}
+
+.icone {
+  display: grid;
+  place-items: center;
+  width: 38px;
+  height: 38px;
+  flex-shrink: 0;
+  border-radius: 50%;
+  background: #dcfce7;
+  color: #15803d;
+  font-size: 21px;
+  font-weight: 800;
+}
+
+.cartao-bemvindo strong {
+  color: #222222;
+  font-size: 14px;
+}
+
+.cartao-bemvindo p {
+  margin: 5px 0 0;
+  color: #6b7280;
+  font-size: 12px;
+}
+
+.botao-secundario {
+  background: #333333;
+}
+
+.botao-secundario:hover {
+  background: #111111;
+}
+
+footer {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 16px 32px;
+  border-top: 1px solid #eeeeee;
+  color: #9ca3af;
+  font-size: 10px;
+}
+
+@media (max-width: 480px) {
+  .painel {
+    border-radius: 16px;
+  }
+
+  .cabecalho {
+    padding: 22px;
+  }
+
+  .conteudo {
+    padding: 24px 22px;
+  }
+
+  .conteudo h2 {
+    font-size: 24px;
+  }
+
+  footer {
+    padding: 15px 22px;
+  }
+}
