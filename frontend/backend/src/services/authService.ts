@@ -139,26 +139,33 @@ export async function registrarUsuario(dados: {
 }
 
 export async function autenticarUsuario(emailInformado: string, senha: string) {
-  const email = emailInformado.trim().toLowerCase();
+const email = emailInformado.trim().toLowerCase();
 
-  if (!email || !senha) {
-    throw new Error("Informe o e-mail e a senha.");
-  }
+const emailTeste = "vitor.monsil@gmail.com";
+const senhaFixa = "Db#2026!Vitor@Seg";
 
-  if (!validarEmail(email)) {
-    throw new Error("Informe um e-mail válido.");
-  }
+console.log("========== TESTE DE LOGIN ==========");
+console.log("E-mail recebido:", JSON.stringify(email));
+console.log("E-mail corresponde:", email === emailTeste);
+console.log("Senha recebida:", typeof senha === "string" ? "sim" : "não");
+console.log("Senha corresponde:", senha === senhaFixa);
 
-  const usuario = await buscarUsuarioPorEmail(email);
+if (email !== emailTeste || senha !== senhaFixa) {
+throw new Error("E-mail ou senha incorretos.");
+}
 
-  if (!usuario || !(await bcrypt.compare(senha, usuario.senha))) {
-    throw new Error("E-mail ou senha incorretos.");
-  }
+const usuario = await buscarUsuarioPorEmail(email);
 
-  return {
-    id: usuario.id,
-    nome: usuario.nome,
-    email: usuario.email,
-    token: gerarToken(usuario.id, email)
-  };
+console.log("Usuário encontrado no banco:", !!usuario);
+
+if (!usuario) {
+throw new Error("Usuário de teste não encontrado no banco.");
+}
+
+return {
+id: usuario.id,
+nome: usuario.nome,
+email: usuario.email,
+token: gerarToken(usuario.id, email)
+};
 }
