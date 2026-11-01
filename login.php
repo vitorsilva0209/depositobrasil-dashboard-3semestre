@@ -7,66 +7,27 @@ if (isset($_SESSION["id"])) {
     exit();
 }
 
-
-
+require_once("classes/Login.php"); 
 include("config/conexao.php");
 
 $erro = "";
 
 if ($_SERVER["REQUEST_METHOD"] === "POST") {
 
-    $usuario = trim($_POST["usuario"] ?? "");
-    $senha = trim($_POST["senha"] ?? "");
+    $usuarioDigitado = $_POST["usuario"] ?? "";
+    $senhaDigitada = $_POST["senha"] ?? "";
 
-    if ($usuario === "" || $senha === "") {
+    $login = new Login($usuarioDigitado, $senhaDigitada);
 
-        $erro = "Preencha todos os campos!";
-
+    if ($login->autenticar($conn)) {
+        
+        header("Location: dashboard.php");
+        exit();
+        
     } else {
-
-        $stmt = $conn->prepare(
-            "SELECT id, nome, senha
-             FROM usuarios
-             WHERE usuario = ?"
-        );
-
-        if (!$stmt) {
-
-            $erro = "Erro ao preparar consulta: " . $conn->error;
-
-        } else {
-
-            $stmt->bind_param("s", $usuario);
-
-            $stmt->execute();
-
-            $resultado = $stmt->get_result();
-
-            if ($resultado->num_rows > 0) {
-
-                $user = $resultado->fetch_assoc();
-
-            
-                if ($senha === $user["senha"]) {
-
-                    $_SESSION["id"] = $user["id"];
-                    $_SESSION["nome"] = $user["nome"];
-
-                    header("Location: dashboard.php");
-                    exit();
-
-                } else {
-
-                    $erro = "Senha incorreta!";
-                }
-
-            } else {
-
-                $erro = "Usuário não encontrado!";
-            }
-
-            $stmt->close();
-        }
+        
+        $erro = $login->getErro();
+        
     }
 }
 
