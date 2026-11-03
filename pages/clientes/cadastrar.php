@@ -2,56 +2,88 @@
 
 include("../../config/conexao.php");
 
-if (isset($_POST['salvar'])) {
+$erro = "";
 
-    $nome = trim($_POST['nome']);
-    $email = trim($_POST['email']);
-    $telefone = trim($_POST['telefone']);
+if (isset($_POST["salvar"])) {
 
-    $stmt = $conn->prepare(
-        "SELECT id FROM clientes WHERE email = ?"
-    );
+    $nome = trim($_POST["nome"] ?? "");
+    $categoria = trim($_POST["categoria"] ?? "");
+    $preco = (float) ($_POST["preco"] ?? 0);
+    $quantidade = (int) ($_POST["quantidade"] ?? 0);
+    $fornecedor = trim($_POST["fornecedor"] ?? "");
+    $imagem_url = trim($_POST["imagem_url"] ?? "");
+    $descricao = trim($_POST["descricao"] ?? "");
 
-    $stmt->bind_param("s", $email);
-    $stmt->execute();
+    if ($nome === "" || $categoria === "" || $preco <= 0) {
 
-    $resultado = $stmt->get_result();
-
-    if ($resultado->num_rows > 0) {
-
-        $erro = "Cliente com este e-mail já está cadastrado.";
+        $erro = "Preencha os campos obrigatórios corretamente.";
 
     } else {
 
-        $stmt = $conn->prepare(
-            "INSERT INTO clientes (nome, email, telefone)
-             VALUES (?, ?, ?)"
+        $verifica = $conn->prepare(
+            "SELECT id FROM produtos WHERE nome = ?"
         );
 
-        $stmt->bind_param(
-            "sss",
-            $nome,
-            $email,
-            $telefone
-        );
+        $verifica->bind_param("s", $nome);
+        $verifica->execute();
 
-        if ($stmt->execute()) {
+        $resultado = $verifica->get_result();
 
-            header("Location: listar.php");
-            exit();
+        if ($resultado->num_rows > 0) {
+
+            $erro = "Produto já cadastrado.";
 
         } else {
 
-            $erro = "Erro ao cadastrar cliente.";
-        }
-    }
+            $stmt = $conn->prepare("
+                INSERT INTO produtos
+                (nome, categoria, preco, quantidade, fornecedor, descricao, imagem_url)
+                VALUES (?, ?, ?, ?, ?, ?, ?)
+            ");
 
-    $stmt->close();
+            if (!$stmt) {
+
+                $erro = "Erro ao preparar cadastro: " . $conn->error;
+
+            } else {
+
+                $stmt->bind_param(
+                    "ssdisss",
+                    $nome,
+                    $categoria,
+                    $preco,
+                    $quantidade,
+                    $fornecedor,
+                    $descricao,
+                    $imagem_url
+                );
+
+                if ($stmt->execute()) {
+
+                    echo "<script>
+                        alert('Produto cadastrado com sucesso!');
+                        window.location='listar.php';
+                    </script>";
+
+                    exit();
+
+                } else {
+
+                    $erro = "Erro ao cadastrar produto: " . $stmt->error;
+                }
+
+                $stmt->close();
+            }
+        }
+
+        $verifica->close();
+    }
 }
 
 ?>
 
 <!DOCTYPE html>
+
 <html lang="pt-BR">
 
 <head>
@@ -60,92 +92,331 @@ if (isset($_POST['salvar'])) {
 
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 
-<title>Novo Cliente</title>
+<title>Cadastrar Produto - Depósito Brasil</title>
 
-<link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+<link
+    href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css"
+    rel="stylesheet"
+>
+
+<link
+    href="https://cdn.jsdelivr.net/npm/summernote@0.9.0/dist/summernote-lite.min.css"
+    rel="stylesheet"
+>
+
+<style>
+
+body {
+    background: #eeeeee;
+    font-family: Arial, sans-serif;
+}
+
+.container-cadastro {
+    max-width: 1100px;
+    margin: 25px auto;
+    background: white;
+    border-radius: 8px;
+    box-shadow: 0 4px 15px rgba(0, 0, 0, 0.15);
+    overflow: hidden;
+    border-top: 6px solid #d32f2f;
+}
+
+.cabecalho {
+    background: #1f1f1f;
+    color: white;
+    padding: 28px;
+}
+
+.cabecalho h1 {
+    margin: 0;
+    font-size: 40px;
+    font-weight: bold;
+}
+
+.conteudo {
+    padding: 40px;
+}
+
+.form-label {
+    font-weight: bold;
+    font-size: 18px;
+    color: #222;
+}
+
+.form-control {
+    border: 1px solid #bbbbbb;
+    border-radius: 7px;
+    padding: 12px 14px;
+    font-size: 18px;
+}
+
+.form-control:focus {
+    border-color: #d32f2f;
+    box-shadow: 0 0 0 0.2rem rgba(211, 47, 47, 0.15);
+}
+
+.campo {
+    margin-bottom: 22px;
+}
+
+.linha-dupla {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 30px;
+}
+
+.btn-cadastrar {
+    background: #d32f2f;
+    border: none;
+    color: white;
+    padding: 12px 25px;
+    font-size: 18px;
+    border-radius: 7px;
+}
+
+.btn-cadastrar:hover {
+    background: #b71c1c;
+    color: white;
+}
+
+.btn-voltar {
+    background: #555555;
+    border: none;
+    color: white;
+    padding: 12px 25px;
+    font-size: 18px;
+    border-radius: 7px;
+}
+
+.btn-voltar:hover {
+    background: #333333;
+    color: white;
+}
+
+.alert-danger {
+    border-left: 5px solid #b71c1c;
+}
+
+.note-editor {
+    border-radius: 7px;
+    overflow: hidden;
+}
+
+@media (max-width: 768px) {
+
+    .container-cadastro {
+        margin: 10px;
+    }
+
+    .conteudo {
+        padding: 20px;
+    }
+
+    .cabecalho h1 {
+        font-size: 30px;
+    }
+
+    .linha-dupla {
+        grid-template-columns: 1fr;
+        gap: 0;
+    }
+
+}
+
+</style>
 
 </head>
 
 <body>
 
-<div class="container mt-5">
+<div class="container-cadastro">
 
-<h2>Novo Cliente</h2>
+    <div class="cabecalho">
 
-<?php if (isset($erro)): ?>
+        <h1>
+            Cadastrar Produto
+        </h1>
 
-<div class="alert alert-danger">
+    </div>
 
-<?= htmlspecialchars($erro); ?>
+    <div class="conteudo">
+
+        <?php if ($erro !== ""): ?>
+
+            <div class="alert alert-danger">
+                <?= htmlspecialchars($erro) ?>
+            </div>
+
+        <?php endif; ?>
+
+        <form method="POST">
+
+            <div class="campo">
+
+                <label class="form-label">
+                    Nome do Produto
+                </label>
+
+                <input
+                    type="text"
+                    name="nome"
+                    class="form-control"
+                    value="<?= htmlspecialchars($_POST["nome"] ?? "") ?>"
+                    required
+                >
+
+            </div>
+
+
+            <div class="campo">
+
+                <label class="form-label">
+                    Categoria
+                </label>
+
+                <input
+                    type="text"
+                    name="categoria"
+                    class="form-control"
+                    value="<?= htmlspecialchars($_POST["categoria"] ?? "") ?>"
+                    required
+                >
+
+            </div>
+
+
+            <div class="linha-dupla">
+
+                <div class="campo">
+
+                    <label class="form-label">
+                        Preço
+                    </label>
+
+                    <input
+                        type="number"
+                        name="preco"
+                        class="form-control"
+                        step="0.01"
+                        min="0"
+                        value="<?= htmlspecialchars($_POST["preco"] ?? "") ?>"
+                        required
+                    >
+
+                </div>
+
+
+                <div class="campo">
+
+                    <label class="form-label">
+                        Quantidade em Estoque
+                    </label>
+
+                    <input
+                        type="number"
+                        name="quantidade"
+                        class="form-control"
+                        min="0"
+                        value="<?= htmlspecialchars($_POST["quantidade"] ?? "0") ?>"
+                        required
+                    >
+
+                </div>
+
+            </div>
+
+
+            <div class="campo">
+
+                <label class="form-label">
+                    Fornecedor
+                </label>
+
+                <input
+                    type="text"
+                    name="fornecedor"
+                    class="form-control"
+                    value="<?= htmlspecialchars($_POST["fornecedor"] ?? "") ?>"
+                >
+
+            </div>
+
+
+            <div class="campo">
+
+                <label class="form-label">
+                    Imagem
+                </label>
+
+                <input
+                    type="text"
+                    name="imagem_url"
+                    class="form-control"
+                    value="<?= htmlspecialchars($_POST["imagem_url"] ?? "") ?>"
+                    placeholder="exemplo: imagens/img/produtos/ferro-10mm.jpg"
+                >
+
+            </div>
+
+
+            <div class="campo">
+
+                <label class="form-label">
+                    Descrição
+                </label>
+
+                <textarea
+                    id="descricao"
+                    name="descricao"
+                    class="form-control"
+                    rows="5"
+                ><?= htmlspecialchars($_POST["descricao"] ?? "") ?></textarea>
+
+            </div>
+
+
+            <div class="mt-4">
+
+                <button
+                    type="submit"
+                    name="salvar"
+                    class="btn btn-cadastrar"
+                >
+                    Cadastrar Produto
+                </button>
+
+                <a
+                    href="listar.php"
+                    class="btn btn-voltar"
+                >
+                    Voltar
+                </a>
+
+            </div>
+
+        </form>
+
+    </div>
 
 </div>
 
-<?php endif; ?>
 
-<form method="POST">
+<script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
 
-<div class="mb-3">
+<script src="https://cdn.jsdelivr.net/npm/summernote@0.9.0/dist/summernote-lite.min.js"></script>
 
-<label class="form-label">
-Nome
-</label>
+<script>
 
-<input
-type="text"
-name="nome"
-class="form-control"
-required
->
+$(document).ready(function() {
 
-</div>
+    $('#descricao').summernote({
+        height: 200,
+        placeholder: 'Digite a descrição do produto...'
+    });
 
-<div class="mb-3">
+});
 
-<label class="form-label">
-E-mail
-</label>
-
-<input
-type="email"
-name="email"
-class="form-control"
-required
->
-
-</div>
-
-<div class="mb-3">
-
-<label class="form-label">
-Telefone
-</label>
-
-<input
-type="text"
-name="telefone"
-class="form-control"
->
-
-</div>
-
-<button
-type="submit"
-name="salvar"
-class="btn btn-success"
->
-Salvar Cliente
-</button>
-
-<a
-href="listar.php"
-class="btn btn-secondary"
->
-Voltar
-</a>
-
-</form>
-
-</div>
+</script>
 
 </body>
 

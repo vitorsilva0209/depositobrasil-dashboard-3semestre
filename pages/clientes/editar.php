@@ -1,8 +1,25 @@
 <?php
 
+session_start();
+
+if (!isset($_SESSION["id"])) {
+    header("Location: ../../login.php");
+    exit();
+}
+
 include("../../config/conexao.php");
 
-$id = (int) ($_GET['id'] ?? 0);
+$id = (int)($_GET["id"] ?? 0);
+
+if ($id <= 0) {
+
+    echo "<script>
+        alert('ID do cliente inválido.');
+        window.location='listar.php';
+    </script>";
+
+    exit();
+}
 
 $stmt = $conn->prepare(
     "SELECT * FROM clientes WHERE id = ?"
@@ -15,45 +32,73 @@ $resultado = $stmt->get_result();
 
 if ($resultado->num_rows === 0) {
 
+    $stmt->close();
+
     echo "<script>
         alert('Cliente não encontrado.');
         window.location='listar.php';
     </script>";
 
     exit();
+
 }
 
 $cliente = $resultado->fetch_assoc();
 
-if (isset($_POST['editar'])) {
+$stmt->close();
 
-    $nome = trim($_POST['nome']);
-    $email = trim($_POST['email']);
-    $telefone = trim($_POST['telefone']);
+$erro = "";
 
-    $stmt = $conn->prepare(
-        "UPDATE clientes
-         SET nome = ?, email = ?, telefone = ?
-         WHERE id = ?"
-    );
+if (isset($_POST["editar"])) {
 
-    $stmt->bind_param(
-        "sssi",
-        $nome,
-        $email,
-        $telefone,
-        $id
-    );
+    $nome = trim($_POST["nome"] ?? "");
+    $email = trim($_POST["email"] ?? "");
+    $telefone = trim($_POST["telefone"] ?? "");
 
-    if ($stmt->execute()) {
+    if ($nome === "" || $email === "") {
 
-        header("Location: listar.php");
-        exit();
+        $erro = "Preencha os campos obrigatórios.";
+
+    } elseif (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
+
+        $erro = "Informe um e-mail válido.";
 
     } else {
 
-        $erro = "Erro ao atualizar cliente.";
+        $stmt = $conn->prepare(
+            "UPDATE clientes
+             SET nome = ?, email = ?, telefone = ?
+             WHERE id = ?"
+        );
+
+        $stmt->bind_param(
+            "sssi",
+            $nome,
+            $email,
+            $telefone,
+            $id
+        );
+
+        if ($stmt->execute()) {
+
+            $stmt->close();
+
+            header("Location: listar.php");
+            exit();
+
+        } else {
+
+            $erro = "Erro ao atualizar cliente.";
+
+        }
+
+        $stmt->close();
+
     }
+
+    $cliente["nome"] = $nome;
+    $cliente["email"] = $email;
+    $cliente["telefone"] = $telefone;
 }
 
 ?>
@@ -64,110 +109,180 @@ if (isset($_POST['editar'])) {
 <head>
 
 <meta charset="UTF-8">
-
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 
-<title>Editar Cliente</title>
+<title>Editar Cliente - Depósito Brasil</title>
 
-<link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+<link
+    href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css"
+    rel="stylesheet"
+>
+
+<style>
+
+body {
+    background: #eeeeee;
+    font-family: Arial, sans-serif;
+}
+
+.container {
+    max-width: 800px;
+    margin-top: 50px;
+}
+
+.card {
+    border: none;
+    border-top: 5px solid #d32f2f;
+    border-radius: 10px;
+    box-shadow: 0 4px 15px rgba(0,0,0,0.15);
+}
+
+.card-header {
+    background: #212529;
+    color: white;
+    padding: 20px;
+}
+
+.card-header h2 {
+    margin: 0;
+}
+
+.card-body {
+    padding: 30px;
+}
+
+.form-label {
+    font-weight: 600;
+    color: #333;
+}
+
+.form-control:focus {
+    border-color: #d32f2f;
+    box-shadow: 0 0 0 0.2rem rgba(211,47,47,0.15);
+}
+
+.btn-atualizar {
+    background: #d32f2f;
+    color: white;
+    border: none;
+}
+
+.btn-atualizar:hover {
+    background: #a92323;
+    color: white;
+}
+
+.btn-voltar {
+    background: #555555;
+    color: white;
+    border: none;
+}
+
+.btn-voltar:hover {
+    background: #333333;
+    color: white;
+}
+
+</style>
 
 </head>
 
 <body>
 
-<div class="container mt-5">
+<div class="container">
 
-<h2>Editar Cliente</h2>
+    <div class="card">
 
-<?php if (isset($erro)): ?>
+        <div class="card-header">
 
-<div class="alert alert-danger">
+            <h2>Editar Cliente</h2>
 
-<?= htmlspecialchars($erro); ?>
+        </div>
 
-</div>
+        <div class="card-body">
 
-<?php endif; ?>
+            <?php if ($erro !== ""): ?>
 
-<form method="POST">
+                <div class="alert alert-danger">
 
-<div class="mb-3">
+                    <?= htmlspecialchars($erro); ?>
 
-<label class="form-label">
-Nome
-</label>
+                </div>
 
-<input
-type="text"
-name="nome"
-value="<?= htmlspecialchars($cliente['nome']); ?>"
-class="form-control"
-required
->
+            <?php endif; ?>
 
-</div>
+            <form method="POST">
 
-<div class="mb-3">
+                <div class="mb-3">
 
-<label class="form-label">
-E-mail
-</label>
+                    <label class="form-label">
+                        Nome
+                    </label>
 
-<input
-type="email"
-name="email"
-value="<?= htmlspecialchars($cliente['email'] ?? ''); ?>"
-class="form-control"
-required
->
+                    <input
+                        type="text"
+                        name="nome"
+                        class="form-control"
+                        value="<?= htmlspecialchars($cliente["nome"] ?? ""); ?>"
+                        required
+                    >
 
-</div>
+                </div>
 
-<div class="mb-3">
+                <div class="mb-3">
 
-<label class="form-label">
-Telefone
-</label>
+                    <label class="form-label">
+                        E-mail
+                    </label>
 
-<input
-type="text"
-name="telefone"
-value="<?= htmlspecialchars($cliente['telefone'] ?? ''); ?>"
-class="form-control"
->
+                    <input
+                        type="email"
+                        name="email"
+                        class="form-control"
+                        value="<?= htmlspecialchars($cliente["email"] ?? ""); ?>"
+                        required
+                    >
 
-</div>
+                </div>
 
-<button
-type="submit"
-name="editar"
-class="btn btn-primary"
->
-Atualizar
-</button>
+                <div class="mb-3">
 
-<a
-href="listar.php"
-class="btn btn-secondary"
->
-Cancelar
-</a>
+                    <label class="form-label">
+                        Telefone
+                    </label>
 
-</form>
+                    <input
+                        type="text"
+                        name="telefone"
+                        class="form-control"
+                        value="<?= htmlspecialchars($cliente["telefone"] ?? ""); ?>"
+                    >
+
+                </div>
+
+                <button
+                    type="submit"
+                    name="editar"
+                    class="btn btn-atualizar"
+                >
+                    Atualizar Cliente
+                </button>
+
+                <a
+                    href="listar.php"
+                    class="btn btn-voltar"
+                >
+                    Cancelar
+                </a>
+
+            </form>
+
+        </div>
+
+    </div>
 
 </div>
 
 </body>
-<link href="https://cdn.jsdelivr.net/npm/summernote@0.9.0/dist/summernote-lite.min.css" rel="stylesheet">
 
-<script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/summernote@0.9.0/dist/summernote-lite.min.js"></script>
-
-<script>
-$(document).ready(function() {
-    $('#descricao').summernote({
-        height: 200
-    });
-});
-</script>
 </html>

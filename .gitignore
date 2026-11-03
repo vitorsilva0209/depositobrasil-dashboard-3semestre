@@ -1,2 +1,8 @@
 node_modules/
 .env
+// criar uma branch fix no projeto 
+node_modules/
+.env
+frontend/backend/.env
+frontend/backend/node_modules/
+frontend/backend/dist/

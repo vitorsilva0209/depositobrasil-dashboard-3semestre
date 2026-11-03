@@ -1,19 +1,43 @@
 <?php
 
+session_start();
+
+if (!isset($_SESSION["id"])) {
+    header("Location: ../../login.php");
+    exit();
+}
+
 include("../../config/conexao.php");
 
-$id = (int) ($_GET['id'] ?? 0);
+$id = (int)($_GET["id"] ?? 0);
+
+if ($id <= 0) {
+
+    echo "<script>
+
+        alert('ID do funcionário inválido.');
+
+        window.location='listar.php';
+
+    </script>";
+
+    exit();
+
+}
 
 $stmt = $conn->prepare(
     "SELECT id FROM funcionarios WHERE id = ?"
 );
 
 $stmt->bind_param("i", $id);
+
 $stmt->execute();
 
 $resultado = $stmt->get_result();
 
 if ($resultado->num_rows === 0) {
+
+    $stmt->close();
 
     echo "<script>
 
@@ -24,7 +48,10 @@ if ($resultado->num_rows === 0) {
     </script>";
 
     exit();
+
 }
+
+$stmt->close();
 
 $stmt = $conn->prepare(
     "DELETE FROM funcionarios WHERE id = ?"
@@ -51,4 +78,11 @@ if ($stmt->execute()) {
         window.location='listar.php';
 
     </script>";
+
 }
+
+$stmt->close();
+
+$conn->close();
+
+?>

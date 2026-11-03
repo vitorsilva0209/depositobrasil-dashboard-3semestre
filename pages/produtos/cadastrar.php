@@ -10,28 +10,63 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
     $nome = trim($_POST["nome"] ?? "");
     $categoria = trim($_POST["categoria"] ?? "");
     $preco = (float)($_POST["preco"] ?? 0);
-    $estoque = (int)($_POST["estoque"] ?? 0);
+    $quantidade = (int)($_POST["quantidade"] ?? 0);
+    $fornecedor = trim($_POST["fornecedor"] ?? "");
     $descricao = trim($_POST["descricao"] ?? "");
     $imagem_url = trim($_POST["imagem_url"] ?? "");
 
-    if ($nome === "" || $categoria === "" || $preco <= 0) {
+    if (
+        $nome === "" ||
+        $categoria === "" ||
+        $preco <= 0
+    ) {
 
-        $mensagem = "Preencha os campos obrigatórios corretamente.";
+        $mensagem =
+            "Preencha os campos obrigatórios corretamente.";
+
         $tipoMensagem = "danger";
 
     } else {
 
-        $colunas = [];
+        $verifica = $conn->prepare(
+            "SELECT id FROM produtos WHERE nome = ?"
+        );
 
-        $resultadoColunas = $conn->query("SHOW COLUMNS FROM produtos");
+        $verifica->bind_param(
+            "s",
+            $nome
+        );
 
-        if (!$resultadoColunas) {
-            $mensagem = "Erro ao verificar a tabela produtos: " . $conn->error;
+        $verifica->execute();
+
+        $resultado = $verifica->get_result();
+
+        if ($resultado->num_rows > 0) {
+
+            $mensagem =
+                "Produto já cadastrado.";
+
             $tipoMensagem = "danger";
+
+            $verifica->close();
+
         } else {
 
-            while ($coluna = $resultadoColunas->fetch_assoc()) {
-                $colunas[] = $coluna["Field"];
+            $verifica->close();
+
+            $resultadoColunas =
+                $conn->query("SHOW COLUMNS FROM produtos");
+
+            $colunas = [];
+
+            if ($resultadoColunas) {
+
+                while ($coluna = $resultadoColunas->fetch_assoc()) {
+
+                    $colunas[] = $coluna["Field"];
+
+                }
+
             }
 
             $campos = [];
@@ -40,60 +75,86 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
             $dados = [];
 
             if (in_array("nome", $colunas)) {
+
                 $campos[] = "nome";
                 $valores[] = "?";
                 $tipos .= "s";
                 $dados[] = $nome;
+
             }
 
             if (in_array("categoria", $colunas)) {
+
                 $campos[] = "categoria";
                 $valores[] = "?";
                 $tipos .= "s";
                 $dados[] = $categoria;
+
             }
 
             if (in_array("preco", $colunas)) {
+
                 $campos[] = "preco";
                 $valores[] = "?";
                 $tipos .= "d";
                 $dados[] = $preco;
+
             }
 
-            if (in_array("estoque", $colunas)) {
-                $campos[] = "estoque";
-                $valores[] = "?";
-                $tipos .= "i";
-                $dados[] = $estoque;
-            } elseif (in_array("quantidade", $colunas)) {
+            if (in_array("quantidade", $colunas)) {
+
                 $campos[] = "quantidade";
                 $valores[] = "?";
                 $tipos .= "i";
-                $dados[] = $estoque;
+                $dados[] = $quantidade;
+
+            } elseif (in_array("estoque", $colunas)) {
+
+                $campos[] = "estoque";
+                $valores[] = "?";
+                $tipos .= "i";
+                $dados[] = $quantidade;
+
+            }
+
+            if (in_array("fornecedor", $colunas)) {
+
+                $campos[] = "fornecedor";
+                $valores[] = "?";
+                $tipos .= "s";
+                $dados[] = $fornecedor;
+
             }
 
             if (in_array("descricao", $colunas)) {
+
                 $campos[] = "descricao";
                 $valores[] = "?";
                 $tipos .= "s";
                 $dados[] = $descricao;
+
             }
 
             if (in_array("imagem_url", $colunas)) {
+
                 $campos[] = "imagem_url";
                 $valores[] = "?";
                 $tipos .= "s";
                 $dados[] = $imagem_url;
+
             }
 
             if (count($campos) === 0) {
 
-                $mensagem = "Não foi possível encontrar os campos da tabela produtos.";
+                $mensagem =
+                    "Não foi possível encontrar os campos da tabela produtos.";
+
                 $tipoMensagem = "danger";
 
             } else {
 
-                $sql = "INSERT INTO produtos (" .
+                $sql =
+                    "INSERT INTO produtos (" .
                     implode(", ", $campos) .
                     ") VALUES (" .
                     implode(", ", $valores) .
@@ -103,94 +164,222 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
 
                 if (!$stmt) {
 
-                    $mensagem = "Erro ao preparar cadastro: " . $conn->error;
+                    $mensagem =
+                        "Erro ao preparar cadastro: " .
+                        $conn->error;
+
                     $tipoMensagem = "danger";
 
                 } else {
 
-                    $stmt->bind_param($tipos, ...$dados);
+                    $stmt->bind_param(
+                        $tipos,
+                        ...$dados
+                    );
 
                     if ($stmt->execute()) {
 
-                        $mensagem = "Produto cadastrado com sucesso!";
-                        $tipoMensagem = "success";
+                        $stmt->close();
 
-                        $_POST = [];
+                        header(
+                            "Location: listar.php"
+                        );
+
+                        exit();
 
                     } else {
 
-                        $mensagem = "Erro ao cadastrar produto: " . $stmt->error;
+                        $mensagem =
+                            "Erro ao cadastrar produto: " .
+                            $stmt->error;
+
                         $tipoMensagem = "danger";
+
+                        $stmt->close();
+
                     }
 
-                    $stmt->close();
                 }
+
             }
+
         }
+
     }
+
 }
+
 ?>
 
 <!DOCTYPE html>
+
 <html lang="pt-BR">
 
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
 
-    <title>Cadastrar Produto - Depósito Brasil</title>
+<meta charset="UTF-8">
 
-    <link
-        href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css"
-        rel="stylesheet">
+<meta
+    name="viewport"
+    content="width=device-width, initial-scale=1.0"
+>
+
+<title>Cadastrar Produto - Depósito Brasil</title>
+
+<link
+    href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css"
+    rel="stylesheet"
+>
+
+<link
+    href="https://cdn.jsdelivr.net/npm/summernote@0.9.0/dist/summernote-lite.min.css"
+    rel="stylesheet"
+>
+
+<style>
+
+body {
+    background: #eeeeee;
+    font-family: Arial, sans-serif;
+}
+
+.container {
+    max-width: 900px;
+    margin-top: 40px;
+    margin-bottom: 40px;
+}
+
+.card {
+    border: none;
+    border-top: 5px solid #d32f2f;
+    border-radius: 10px;
+    box-shadow: 0 4px 15px rgba(0, 0, 0, 0.15);
+}
+
+.card-header {
+    background: #1e1e1e;
+    color: white;
+    padding: 20px;
+}
+
+.card-header h2 {
+    margin: 0;
+    font-weight: bold;
+}
+
+.card-body {
+    padding: 30px;
+}
+
+.form-label {
+    font-weight: bold;
+    color: #343434;
+}
+
+.form-control {
+    border: 1px solid #bdbdbd;
+}
+
+.form-control:focus {
+    border-color: #d32f2f;
+    box-shadow: 0 0 0 0.2rem rgba(211, 47, 47, 0.15);
+}
+
+.btn-salvar {
+    background: #d32f2f;
+    border-color: #d32f2f;
+    color: white;
+}
+
+.btn-salvar:hover {
+    background: #b71c1c;
+    border-color: #b71c1c;
+    color: white;
+}
+
+.btn-voltar {
+    background: #343a40;
+    border-color: #343a40;
+    color: white;
+}
+
+.btn-voltar:hover {
+    background: #1e1e1e;
+    border-color: #1e1e1e;
+    color: white;
+}
+
+</style>
+
 </head>
 
-<body class="bg-dark text-white">
+<body>
 
-    <div class="container mt-5">
+<div class="container">
 
-        <div class="card bg-secondary text-white shadow">
+    <div class="card">
 
-            <div class="card-header">
-                <h3 class="mb-0">Cadastrar Produto</h3>
-            </div>
+        <div class="card-header">
 
-            <div class="card-body">
+            <h2>
+                Cadastro de Produto
+            </h2>
 
-                <?php if ($mensagem !== ""): ?>
+        </div>
 
-                    <div class="alert alert-<?= $tipoMensagem ?>">
-                        <?= htmlspecialchars($mensagem) ?>
-                    </div>
+        <div class="card-body">
 
-                <?php endif; ?>
+            <?php if ($mensagem !== ""): ?>
 
-                <form method="POST">
+                <div class="alert alert-<?= htmlspecialchars($tipoMensagem); ?>">
 
-                    <div class="mb-3">
-                        <label class="form-label">Nome</label>
+                    <?= htmlspecialchars($mensagem); ?>
 
-                        <input
-                            type="text"
-                            name="nome"
-                            class="form-control"
-                            value="<?= htmlspecialchars($_POST["nome"] ?? "") ?>"
-                            required>
-                    </div>
+                </div>
 
-                    <div class="mb-3">
-                        <label class="form-label">Categoria</label>
+            <?php endif; ?>
 
-                        <input
-                            type="text"
-                            name="categoria"
-                            class="form-control"
-                            value="<?= htmlspecialchars($_POST["categoria"] ?? "") ?>"
-                            required>
-                    </div>
+            <form method="POST">
 
-                    <div class="mb-3">
-                        <label class="form-label">Preço</label>
+                <div class="mb-3">
+
+                    <label class="form-label">
+                        Nome do Produto
+                    </label>
+
+                    <input
+                        type="text"
+                        name="nome"
+                        class="form-control"
+                        value="<?= htmlspecialchars($_POST["nome"] ?? ""); ?>"
+                        required
+                    >
+
+                </div>
+
+                <div class="mb-3">
+
+                    <label class="form-label">
+                        Categoria
+                    </label>
+
+                    <input
+                        type="text"
+                        name="categoria"
+                        class="form-control"
+                        value="<?= htmlspecialchars($_POST["categoria"] ?? ""); ?>"
+                        required
+                    >
+
+                </div>
+
+                <div class="row">
+
+                    <div class="col-md-6 mb-3">
+
+                        <label class="form-label">
+                            Preço
+                        </label>
 
                         <input
                             type="number"
@@ -198,58 +387,114 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
                             class="form-control"
                             step="0.01"
                             min="0"
-                            value="<?= htmlspecialchars($_POST["preco"] ?? "") ?>"
-                            required>
+                            value="<?= htmlspecialchars($_POST["preco"] ?? ""); ?>"
+                            required
+                        >
+
                     </div>
 
-                    <div class="mb-3">
-                        <label class="form-label">Estoque</label>
+                    <div class="col-md-6 mb-3">
+
+                        <label class="form-label">
+                            Quantidade em Estoque
+                        </label>
 
                         <input
                             type="number"
-                            name="estoque"
+                            name="quantidade"
                             class="form-control"
                             min="0"
-                            value="<?= htmlspecialchars($_POST["estoque"] ?? "0") ?>">
+                            value="<?= htmlspecialchars($_POST["quantidade"] ?? "0"); ?>"
+                            required
+                        >
+
                     </div>
 
-                    <div class="mb-3">
-                        <label class="form-label">Descrição</label>
+                </div>
 
-                        <textarea
-                            name="descricao"
-                            class="form-control"
-                            rows="4"><?= htmlspecialchars($_POST["descricao"] ?? "") ?></textarea>
-                    </div>
+                <div class="mb-3">
 
-                    <div class="mb-3">
-                        <label class="form-label">Imagem</label>
+                    <label class="form-label">
+                        Fornecedor
+                    </label>
 
-                        <input
-                            type="text"
-                            name="imagem_url"
-                            class="form-control"
-                            placeholder="exemplo.jpg"
-                            value="<?= htmlspecialchars($_POST["imagem_url"] ?? "") ?>">
-                    </div>
+                    <input
+                        type="text"
+                        name="fornecedor"
+                        class="form-control"
+                        value="<?= htmlspecialchars($_POST["fornecedor"] ?? ""); ?>"
+                    >
 
-                    <button
-                        type="submit"
-                        class="btn btn-danger">
-                        Cadastrar Produto
-                    </button>
+                </div>
 
-                    <a
-                        href="listar.php"
-                        class="btn btn-secondary">
-                        Voltar
-                    </a>
+                <div class="mb-3">
 
-                </form>
+                    <label class="form-label">
+                        Imagem
+                    </label>
 
-            </div>
+                    <input
+                        type="text"
+                        name="imagem_url"
+                        class="form-control"
+                        placeholder="exemplo.jpg ou imagens/img/produtos/exemplo.jpg"
+                        value="<?= htmlspecialchars($_POST["imagem_url"] ?? ""); ?>"
+                    >
+
+                </div>
+
+                <div class="mb-4">
+
+                    <label class="form-label">
+                        Descrição
+                    </label>
+
+                    <textarea
+                        id="descricao"
+                        name="descricao"
+                        class="form-control"
+                        rows="5"
+                    ><?= htmlspecialchars($_POST["descricao"] ?? ""); ?></textarea>
+
+                </div>
+
+                <button
+                    type="submit"
+                    class="btn btn-salvar"
+                >
+                    Cadastrar Produto
+                </button>
+
+                <a
+                    href="listar.php"
+                    class="btn btn-voltar"
+                >
+                    Voltar
+                </a>
+
+            </form>
+
         </div>
+
     </div>
+
+</div>
+
+<script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
+
+<script src="https://cdn.jsdelivr.net/npm/summernote@0.9.0/dist/summernote-lite.min.js"></script>
+
+<script>
+
+$(document).ready(function() {
+
+    $('#descricao').summernote({
+        height: 200
+    });
+
+});
+
+</script>
 
 </body>
 
