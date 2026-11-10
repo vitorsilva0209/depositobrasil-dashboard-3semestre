@@ -1,15 +1,23 @@
-import produtosRoutes from "./routes/produtosRoutes";
 import express from "express";
 import cors from "cors";
 import dotenv from "dotenv";
-import { database } from "./config/database";
-import authRoutes from "./routes/authRoutes";
-import { autenticarToken } from "./middlewares/authMiddleware";
 import path from "path";
+
+import { database } from "./config/database";
+import { autenticarToken } from "./middlewares/authMiddleware";
+
+import usuariosRoutes from "./routes/usuariosRoutes";
+import authRoutes from "./routes/authRoutes";
+import produtosRoutes from "./routes/produtosRoutes";
+import clientesRoutes from "./routes/clientesRoutes";
+import funcionariosRoutes from "./routes/funcionariosRoutes";
+import vendasRoutes from "./routes/vendasRoutes";
+
 dotenv.config();
 
 const app = express();
 const PORT = Number(process.env.PORT) || 3000;
+
 app.use(
   "/imagens",
   express.static(path.resolve(process.cwd(), "../../imagens"))
@@ -31,13 +39,18 @@ app.use(express.urlencoded({ extended: true }));
 
 app.use("/api/auth", authRoutes);
 app.use("/api/produtos", produtosRoutes);
+app.use("/api/clientes", clientesRoutes);
+app.use("/api/funcionarios", funcionariosRoutes);
+app.use("/api/vendas", vendasRoutes);
+app.use("/api/usuarios", usuariosRoutes);
+
 app.get("/", async (_req, res) => {
   try {
     const [resultado] = await database.query(
       "SELECT DATABASE() AS banco"
     );
 
-    res.json({
+    return res.json({
       sucesso: true,
       mensagem: "API conectada ao banco!",
       resultado,
@@ -45,7 +58,7 @@ app.get("/", async (_req, res) => {
   } catch (erro) {
     console.error("Erro na conexão com o banco:", erro);
 
-    res.status(500).json({
+    return res.status(500).json({
       sucesso: false,
       mensagem: "Não foi possível conectar ao banco de dados.",
     });
@@ -56,7 +69,7 @@ app.get("/api/protegido", autenticarToken, (req, res) => {
   const requisicao =
     req as import("./middlewares/authMiddleware").RequisicaoAutenticada;
 
-  res.json({
+  return res.json({
     sucesso: true,
     mensagem: "Acesso autorizado!",
     usuarioId: requisicao.usuarioId,

@@ -1,16 +1,18 @@
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, type FormEvent } from "react";
 import "./App.css";
-const [produtoEditando, setProdutoEditando] = useState<number | null>(null);
 
 const API_URL = "http://localhost:3000";
 
 type Tela = "login" | "cadastro" | "dashboard";
+type Modulo = "produtos" | "clientes" | "funcionarios" | "vendas" | "perfil";
 
 type Usuario = {
   id?: number;
   nome?: string;
-  usuarioId?: number;
+  email?: string;
+  cpf?: string;
+  usuario?: string;
 };
 
 type Produto = {
@@ -21,6 +23,50 @@ type Produto = {
   descricao: string;
   imagem_url: string;
   estoque: number;
+};
+
+type Registro = {
+  id: number;
+  produto?: string;
+  produto_nome?: string;
+  produto_id?: number;
+  data_venda?: string;
+  [chave: string]: string | number | null | undefined;
+};
+
+type DadosFormulario = Record<string, string | number>;
+
+const formularios: Record<Exclude<Modulo, "perfil">, Record<string, string>> = {
+  produtos: {
+    nome: "",
+    categoria: "",
+    preco: "",
+    descricao: "",
+    imagem_url: "",
+    estoque: "",
+  },
+  clientes: {
+    nome: "",
+    email: "",
+    telefone: "",
+  },
+  funcionarios: {
+    nome: "",
+    cargo: "",
+    salario: "",
+  },
+  vendas: {
+    produto_id: "",
+    quantidade: "",
+    data_venda: "",
+  },
+};
+
+const rotas: Record<Exclude<Modulo, "perfil">, string> = {
+  produtos: "/api/produtos",
+  clientes: "/api/clientes",
+  funcionarios: "/api/funcionarios",
+  vendas: "/api/vendas",
 };
 
 function validarEmail(email: string): boolean {
@@ -57,6 +103,38 @@ function validarCPF(cpf: string): boolean {
   return digito === Number(numero[10]);
 }
 
+function formatarData(data: string | undefined): string {
+  if (!data) return "-";
+
+  const dataFormatada = new Date(data);
+
+  if (isNaN(dataFormatada.getTime())) return "-";
+
+  return dataFormatada.toLocaleString("pt-BR", {
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+}
+
+function formatarDataParaInput(data: string | undefined): string {
+  if (!data) return "";
+
+  const dataFormatada = new Date(data);
+
+  if (isNaN(dataFormatada.getTime())) return "";
+
+  const ano = dataFormatada.getFullYear();
+  const mes = String(dataFormatada.getMonth() + 1).padStart(2, "0");
+  const dia = String(dataFormatada.getDate()).padStart(2, "0");
+  const hora = String(dataFormatada.getHours()).padStart(2, "0");
+  const minuto = String(dataFormatada.getMinutes()).padStart(2, "0");
+
+  return `${ano}-${mes}-${dia}T${hora}:${minuto}`;
+}
+
 async function requisicaoAPI(
   rota: string,
   metodo: string,
@@ -72,7 +150,7 @@ async function requisicaoAPI(
     ...(dados ? { body: JSON.stringify(dados) } : {}),
   });
 
-  const resultado = await resposta.json();
+  const resultado = await resposta.json().catch(() => ({}));
 
   if (!resposta.ok) {
     throw new Error(resultado.mensagem || "Erro na requisição.");
@@ -83,6 +161,7 @@ async function requisicaoAPI(
 
 function App() {
   const [tela, setTela] = useState<Tela>("login");
+  const [modulo, setModulo] = useState<Modulo>("produtos");
 
   const [nome, setNome] = useState("");
   const [email, setEmail] = useState("");
@@ -93,24 +172,23 @@ function App() {
   const [token, setToken] = useState("");
 
   const [produtos, setProdutos] = useState<Produto[]>([]);
-  const [mensagem, setMensagem] = useState("");
-  const [carregando, setCarregando] = useState(false);
+  const [registros, setRegistros] = useState<Registro[]>([]);
 
-  const [busca, setBusca] = useState("");
-
-  const [mostrarCadastroProduto, setMostrarCadastroProduto] =
-    useState(false);
-
-  const [novoProduto, setNovoProduto] = useState({
+  const [perfil, setPerfil] = useState<Usuario>({
     nome: "",
-    categoria: "",
-    preco: "",
-    descricao: "",
-    imagem_url: "",
-    estoque: "",
+    email: "",
+    cpf: "",
+    usuario: "",
   });
 
-  async function fazerLogin(e: React.FormEvent<HTMLFormElement>) {
+  const [formulario, setFormulario] = useState<Record<string, string>>({});
+  const [busca, setBusca] = useState("");
+  const [mensagem, setMensagem] = useState("");
+  const [carregando, setCarregando] = useState(false);
+  const [editandoId, setEditandoId] = useState<number | null>(null);
+  const [mostrarFormulario, setMostrarFormulario] = useState(false);
+
+  async function fazerLogin(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();
     setMensagem("");
     setCarregando(true);
@@ -126,13 +204,11 @@ function App() {
         { email, senha }
       );
 
-      const tokenRecebido = resultado.token;
-
-      if (!tokenRecebido) {
+      if (!resultado.token) {
         throw new Error("A API não retornou o token de acesso.");
       }
 
-      setToken(tokenRecebido);
+      setToken(resultado.token);
       setUsuario(resultado.usuario || resultado.user || {});
       setTela("dashboard");
       setMensagem("Login realizado com sucesso!");
@@ -145,27 +221,25 @@ function App() {
     }
   }
 
-  async function fazerCadastro(e: React.FormEvent<HTMLFormElement>) {
+  async function fazerCadastro(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();
     setMensagem("");
     setCarregando(true);
 
     try {
-      if (!nome.trim()) {
-        throw new Error("Informe seu nome.");
+      if (!nome.trim()) throw new Error("Informe seu nome.");
+      if (!validarEmail(email)) throw new Error("Digite um e-mail válido.");
+
+      const senhaForte =
+        /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[^A-Za-z0-9]).{8,}$/;
+
+      if (!senhaForte.test(senha)) {
+        throw new Error(
+          "A senha deve ter pelo menos 8 caracteres, letra maiúscula, minúscula, número e caractere especial."
+        );
       }
 
-      if (!validarEmail(email)) {
-        throw new Error("Digite um e-mail válido.");
-      }
-
-      if (senha.length < 6) {
-        throw new Error("A senha deve ter pelo menos 6 caracteres.");
-      }
-
-      if (!validarCPF(cpf)) {
-        throw new Error("CPF inválido.");
-      }
+      if (!validarCPF(cpf)) throw new Error("CPF inválido.");
 
       const resultado = await requisicaoAPI(
         "/api/auth/registrar",
@@ -173,10 +247,7 @@ function App() {
         { nome, email, senha, cpf: cpf.replace(/\D/g, "") }
       );
 
-      setMensagem(
-        resultado.mensagem || "Cadastro realizado com sucesso!"
-      );
-
+      setMensagem(resultado.mensagem || "Cadastro realizado com sucesso!");
       setTela("login");
       setNome("");
       setCpf("");
@@ -192,65 +263,251 @@ function App() {
 
   async function carregarProdutos() {
     try {
-      const resultado = await requisicaoAPI(
-        "/api/produtos",
-        "GET"
-      );
-
+      const resultado = await requisicaoAPI("/api/produtos", "GET");
       setProdutos(resultado.produtos || []);
     } catch (erro) {
       setMensagem(
-        erro instanceof Error
-          ? erro.message
-          : "Erro ao carregar produtos."
+        erro instanceof Error ? erro.message : "Erro ao carregar produtos."
       );
     }
   }
 
-  async function cadastrarProduto(e: React.FormEvent<HTMLFormElement>) {
+  async function carregarModulo(alvo: Modulo = modulo) {
+    if (alvo === "perfil") {
+      await carregarPerfil();
+      return;
+    }
+
+    try {
+      setCarregando(true);
+
+      const resultado = await requisicaoAPI(
+        `${rotas[alvo]}?pagina=1&limite=100`,
+        "GET",
+        undefined,
+        token
+      );
+
+      const lista =
+        resultado[alvo] ||
+        resultado.registros ||
+        resultado.dados ||
+        [];
+
+      setRegistros(Array.isArray(lista) ? lista : []);
+
+      if (alvo === "produtos") {
+        setProdutos(Array.isArray(lista) ? lista : []);
+      }
+    } catch (erro) {
+      setMensagem(
+        erro instanceof Error
+          ? erro.message
+          : `Erro ao carregar ${alvo}.`
+      );
+    } finally {
+      setCarregando(false);
+    }
+  }
+
+  async function carregarPerfil() {
+    try {
+      const resultado = await requisicaoAPI(
+        "/api/usuarios/me",
+        "GET",
+        undefined,
+        token
+      );
+
+      const dados = resultado.usuario || resultado;
+
+      setPerfil({
+        nome: dados.nome || "",
+        email: dados.email || "",
+        cpf: dados.cpf || "",
+        usuario: dados.usuario || "",
+      });
+    } catch (erro) {
+      setMensagem(
+        erro instanceof Error ? erro.message : "Erro ao carregar perfil."
+      );
+    }
+  }
+
+  function abrirModulo(alvo: Modulo) {
+    setModulo(alvo);
+    setBusca("");
+    setMensagem("");
+    setEditandoId(null);
+    setMostrarFormulario(false);
+
+    if (alvo === "perfil") {
+      carregarPerfil();
+    } else {
+      carregarModulo(alvo);
+    }
+  }
+
+  function abrirNovoRegistro() {
+    if (modulo === "perfil") return;
+
+    setFormulario({ ...formularios[modulo] });
+    setEditandoId(null);
+    setMostrarFormulario(true);
+    setMensagem("");
+  }
+
+  function editarRegistro(registro: Registro) {
+    if (modulo === "perfil") return;
+
+    const valores: Record<string, string> = {};
+
+    Object.keys(formularios[modulo]).forEach((campo) => {
+      if (campo === "data_venda") {
+        valores[campo] = formatarDataParaInput(
+          registro[campo] as string | undefined
+        );
+      } else {
+        valores[campo] = String(registro[campo] ?? "");
+      }
+    });
+
+    setFormulario(valores);
+    setEditandoId(registro.id);
+    setMostrarFormulario(true);
+    setMensagem("");
+  }
+
+  async function salvarRegistro(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();
     setMensagem("");
 
+    if (modulo === "perfil") return;
+
     try {
-      if (!novoProduto.nome.trim()) {
-        throw new Error("Informe o nome do produto.");
+      setCarregando(true);
+
+      const dados: DadosFormulario = { ...formulario };
+
+      if (modulo === "produtos") {
+        dados.preco = Number(dados.preco);
+        dados.estoque = Number(dados.estoque);
       }
 
-      if (!novoProduto.categoria.trim()) {
-        throw new Error("Informe a categoria.");
+      if (modulo === "funcionarios") {
+        dados.salario = Number(dados.salario);
       }
+
+      if (modulo === "vendas") {
+        dados.produto_id = Number(dados.produto_id);
+        dados.quantidade = Number(dados.quantidade);
+      }
+
+      const rota = rotas[modulo];
 
       const resultado = await requisicaoAPI(
-        "/api/produtos",
-        "POST",
-        {
-          ...novoProduto,
-          preco: Number(novoProduto.preco),
-          estoque: Number(novoProduto.estoque),
-        },
+        editandoId ? `${rota}/${editandoId}` : rota,
+        editandoId ? "PUT" : "POST",
+        dados,
         token
       );
 
       setMensagem(
-        resultado.mensagem || "Produto cadastrado com sucesso!"
+        resultado.mensagem ||
+          (editandoId
+            ? "Registro atualizado com sucesso!"
+            : "Registro cadastrado com sucesso!")
       );
 
-      setNovoProduto({
-        nome: "",
-        categoria: "",
-        preco: "",
-        descricao: "",
-        imagem_url: "",
-        estoque: "",
-      });
+      setMostrarFormulario(false);
+      setEditandoId(null);
 
-      setMostrarCadastroProduto(false);
+      await carregarModulo(modulo);
+      await carregarProdutos();
+    } catch (erro) {
+      setMensagem(
+        erro instanceof Error ? erro.message : "Erro ao salvar registro."
+      );
+    } finally {
+      setCarregando(false);
+    }
+  }
+
+  async function excluirRegistro(id: number) {
+    if (!window.confirm("Tem certeza que deseja excluir este registro?")) {
+      return;
+    }
+
+    try {
+      setCarregando(true);
+
+      const resultado = await requisicaoAPI(
+        `${rotas[modulo as Exclude<Modulo, "perfil">]}/${id}`,
+        "DELETE",
+        undefined,
+        token
+      );
+
+      setMensagem(resultado.mensagem || "Registro excluído com sucesso!");
+
+      await carregarModulo(modulo);
       await carregarProdutos();
     } catch (erro) {
       setMensagem(
         erro instanceof Error
           ? erro.message
-          : "Erro ao cadastrar produto."
+          : "Erro ao excluir registro."
+      );
+    } finally {
+      setCarregando(false);
+    }
+  }
+
+  async function salvarPerfil(e: FormEvent<HTMLFormElement>) {
+    e.preventDefault();
+    setMensagem("");
+
+    try {
+      const nomeAtualizado = perfil.nome?.trim();
+
+      if (!nomeAtualizado) {
+        throw new Error("Informe seu nome.");
+      }
+
+      if (!validarCPF(perfil.cpf || "")) {
+        throw new Error("CPF inválido.");
+      }
+
+      const resultado = await requisicaoAPI(
+        "/api/usuarios/me",
+        "PUT",
+        {
+          nome: nomeAtualizado,
+          cpf: perfil.cpf?.replace(/\D/g, ""),
+          usuario: perfil.usuario,
+        },
+        token
+      );
+
+      const nomeConfirmado =
+        resultado.usuario?.nome ||
+        resultado.nome ||
+        nomeAtualizado;
+
+      setUsuario((atual) => ({
+        ...atual,
+        nome: nomeConfirmado,
+      }));
+
+      setPerfil((atual) => ({
+        ...atual,
+        nome: nomeConfirmado,
+      }));
+
+      setMensagem(resultado.mensagem || "Perfil atualizado com sucesso!");
+    } catch (erro) {
+      setMensagem(
+        erro instanceof Error ? erro.message : "Erro ao atualizar perfil."
       );
     }
   }
@@ -259,15 +516,20 @@ function App() {
     setToken("");
     setUsuario(null);
     setProdutos([]);
+    setRegistros([]);
     setEmail("");
     setSenha("");
     setMensagem("");
+    setModulo("produtos");
+    setMostrarFormulario(false);
+    setEditandoId(null);
     setTela("login");
   }
 
   useEffect(() => {
     if (tela === "dashboard") {
       carregarProdutos();
+      carregarModulo("produtos");
     }
   }, [tela]);
 
@@ -277,6 +539,110 @@ function App() {
       .includes(busca.toLowerCase())
   );
 
+  const registrosFiltrados = registros.filter((registro) =>
+    Object.values(registro)
+      .map((valor) => String(valor ?? ""))
+      .join(" ")
+      .toLowerCase()
+      .includes(busca.toLowerCase())
+  );
+
+  const titulos: Record<Modulo, string> = {
+    produtos: "Produtos",
+    clientes: "Clientes",
+    funcionarios: "Funcionários",
+    vendas: "Vendas",
+    perfil: "Meu perfil",
+  };
+
+  function campoFormulario(campo: string) {
+    const nomes: Record<string, string> = {
+      nome: "Nome",
+      categoria: "Categoria",
+      preco: "Preço",
+      descricao: "Descrição",
+      imagem_url: "Caminho da imagem",
+      estoque: "Estoque",
+      email: "E-mail",
+      telefone: "Telefone",
+      cargo: "Cargo",
+      salario: "Salário",
+      produto_id: "Produto",
+      quantidade: "Quantidade",
+      data_venda: "Data da venda",
+    };
+
+    if (campo === "produto_id") {
+      return (
+        <label key={campo}>
+          {nomes[campo]}
+          <select
+            value={formulario[campo] || ""}
+            onChange={(e) =>
+              setFormulario({ ...formulario, [campo]: e.target.value })
+            }
+            required
+          >
+            <option value="">Selecione um produto</option>
+
+            {produtos.map((produto) => (
+              <option key={produto.id} value={produto.id}>
+                {produto.nome}
+              </option>
+            ))}
+          </select>
+        </label>
+      );
+    }
+
+    if (campo === "descricao") {
+      return (
+        <label key={campo}>
+          {nomes[campo]}
+          <textarea
+            value={formulario[campo] || ""}
+            onChange={(e) =>
+              setFormulario({ ...formulario, [campo]: e.target.value })
+            }
+          />
+        </label>
+      );
+    }
+
+    return (
+      <label key={campo}>
+        {nomes[campo] || campo}
+
+        <input
+          type={
+            campo === "preco" || campo === "salario"
+              ? "number"
+              : campo === "estoque" ||
+                  campo === "quantidade" ||
+                  campo === "produto_id"
+                ? "number"
+                : campo === "data_venda"
+                  ? "datetime-local"
+                  : campo === "email"
+                    ? "email"
+                    : "text"
+          }
+          min={
+            ["preco", "salario", "estoque", "quantidade"].includes(campo)
+              ? "0"
+              : undefined
+          }
+          step={["preco", "salario"].includes(campo) ? "0.01" : undefined}
+          value={formulario[campo] || ""}
+          onChange={(e) =>
+            setFormulario({ ...formulario, [campo]: e.target.value })
+          }
+          required={campo !== "descricao" && campo !== "imagem_url"}
+        />
+      </label>
+    );
+  }
+
   return (
     <main className="app">
       <section className="painel">
@@ -285,15 +651,12 @@ function App() {
             <h1>DEPÓSITO BRASIL</h1>
             <p>Materiais de Construção</p>
           </div>
+
           <span className="status-online">Sistema online</span>
         </header>
 
         <div className="conteudo">
-          {mensagem && (
-            <div className="mensagem">
-              {mensagem}
-            </div>
-          )}
+          {mensagem && <div className="mensagem">{mensagem}</div>}
 
           {tela === "login" && (
             <form onSubmit={fazerLogin}>
@@ -323,10 +686,7 @@ function App() {
 
               <p>
                 Não possui conta?{" "}
-                <button
-                  type="button"
-                  onClick={() => setTela("cadastro")}
-                >
+                <button type="button" onClick={() => setTela("cadastro")}>
                   Criar conta
                 </button>
               </p>
@@ -341,7 +701,6 @@ function App() {
               <input
                 value={nome}
                 onChange={(e) => setNome(e.target.value)}
-                placeholder="Digite seu nome"
                 required
               />
 
@@ -350,7 +709,6 @@ function App() {
                 type="email"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
-                placeholder="Digite seu e-mail"
                 required
               />
 
@@ -358,8 +716,8 @@ function App() {
               <input
                 value={cpf}
                 onChange={(e) => setCpf(e.target.value)}
-                placeholder="Digite seu CPF"
                 maxLength={14}
+                placeholder="000.000.000-00"
                 required
               />
 
@@ -368,7 +726,7 @@ function App() {
                 type="password"
                 value={senha}
                 onChange={(e) => setSenha(e.target.value)}
-                placeholder="Mínimo de 6 caracteres"
+                placeholder="Mínimo 8 caracteres"
                 required
               />
 
@@ -376,10 +734,7 @@ function App() {
                 {carregando ? "Cadastrando..." : "Cadastrar"}
               </button>
 
-              <button
-                type="button"
-                onClick={() => setTela("login")}
-              >
+              <button type="button" onClick={() => setTela("login")}>
                 Voltar ao login
               </button>
             </form>
@@ -390,9 +745,7 @@ function App() {
               <div className="dashboard-topo">
                 <div>
                   <h2>Dashboard</h2>
-                  <p>
-                    Bem-vindo(a), {usuario?.nome || "usuário"}!
-                  </p>
+                  <p>Bem-vindo(a), {usuario?.nome || "usuário"}!</p>
                 </div>
 
                 <button className="botao-sair" onClick={sair}>
@@ -412,165 +765,280 @@ function App() {
                 </div>
               </div>
 
+              <nav className="menu-crud">
+                {(
+                  [
+                    "produtos",
+                    "clientes",
+                    "funcionarios",
+                    "vendas",
+                    "perfil",
+                  ] as Modulo[]
+                ).map((item) => (
+                  <button
+                    key={item}
+                    type="button"
+                    className={modulo === item ? "menu-ativo" : ""}
+                    onClick={() => abrirModulo(item)}
+                  >
+                    {titulos[item]}
+                  </button>
+                ))}
+              </nav>
+
               <div className="produtos-topo">
-                <h2>Produtos</h2>
+                <h2>{titulos[modulo]}</h2>
 
-                <button
-                  className="botao-atualizar"
-                  onClick={carregarProdutos}
-                >
-                  Atualizar
-                </button>
+                {modulo !== "perfil" && (
+                  <>
+                    <button
+                      className="botao-atualizar"
+                      type="button"
+                      onClick={() => carregarModulo(modulo)}
+                    >
+                      Atualizar
+                    </button>
 
-                <button
-                  type="button"
-                  onClick={() =>
-                    setMostrarCadastroProduto(!mostrarCadastroProduto)
-                  }
-                >
-                  {mostrarCadastroProduto
-                    ? "Fechar cadastro"
-                    : "Novo produto"}
-                </button>
+                    <button type="button" onClick={abrirNovoRegistro}>
+                      Novo cadastro
+                    </button>
+                  </>
+                )}
               </div>
 
-              {mostrarCadastroProduto && (
-                <form onSubmit={cadastrarProduto}>
-                  <h3>Cadastrar produto</h3>
+              {modulo === "perfil" && (
+                <form onSubmit={salvarPerfil}>
+                  <h3>Editar meus dados</h3>
 
                   <label>Nome</label>
                   <input
-                    value={novoProduto.nome}
+                    value={perfil.nome || ""}
                     onChange={(e) =>
-                      setNovoProduto({
-                        ...novoProduto,
-                        nome: e.target.value,
-                      })
+                      setPerfil({ ...perfil, nome: e.target.value })
                     }
                     required
                   />
 
-                  <label>Categoria</label>
+                  <label>E-mail (não pode ser alterado)</label>
+                  <input value={perfil.email || ""} disabled />
+
+                  <label>CPF</label>
                   <input
-                    value={novoProduto.categoria}
+                    value={perfil.cpf || ""}
                     onChange={(e) =>
-                      setNovoProduto({
-                        ...novoProduto,
-                        categoria: e.target.value,
-                      })
+                      setPerfil({ ...perfil, cpf: e.target.value })
                     }
                     required
                   />
 
-                  <label>Preço</label>
+                  <label>Usuário</label>
                   <input
-                    type="number"
-                    min="0"
-                    step="0.01"
-                    value={novoProduto.preco}
+                    value={perfil.usuario || ""}
                     onChange={(e) =>
-                      setNovoProduto({
-                        ...novoProduto,
-                        preco: e.target.value,
-                      })
-                    }
-                    required
-                  />
-
-                  <label>Descrição</label>
-                  <textarea
-                    value={novoProduto.descricao}
-                    onChange={(e) =>
-                      setNovoProduto({
-                        ...novoProduto,
-                        descricao: e.target.value,
-                      })
+                      setPerfil({ ...perfil, usuario: e.target.value })
                     }
                   />
 
-                  <label>Imagem (caminho)</label>
-                  <input
-                    value={novoProduto.imagem_url}
-                    onChange={(e) =>
-                      setNovoProduto({
-                        ...novoProduto,
-                        imagem_url: e.target.value,
-                      })
-                    }
-                    placeholder="imagens/img/produtos/produto.jpg"
-                  />
+                  <button type="submit">Salvar perfil</button>
+                </form>
+              )}
 
-                  <label>Estoque</label>
-                  <input
-                    type="number"
-                    min="0"
-                    value={novoProduto.estoque}
-                    onChange={(e) =>
-                      setNovoProduto({
-                        ...novoProduto,
-                        estoque: e.target.value,
-                      })
-                    }
-                    required
-                  />
+              {modulo !== "perfil" && mostrarFormulario && (
+                <form onSubmit={salvarRegistro}>
+                  <h3>
+                    {editandoId ? "Editar registro" : "Novo cadastro"}
+                  </h3>
 
-                  <button type="submit">
-                    Salvar produto
+                  {Object.keys(formularios[modulo]).map((campo) =>
+                    campoFormulario(campo)
+                  )}
+
+                  <button type="submit" disabled={carregando}>
+                    {carregando
+                      ? "Salvando..."
+                      : editandoId
+                        ? "Salvar alterações"
+                        : "Cadastrar"}
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setMostrarFormulario(false);
+                      setEditandoId(null);
+                    }}
+                  >
+                    Cancelar
                   </button>
                 </form>
               )}
 
-              <input
-                className="campo-busca"
-                value={busca}
-                onChange={(e) => setBusca(e.target.value)}
-                placeholder="Buscar produto..."
-              />
+              {modulo === "produtos" && !mostrarFormulario && (
+                <>
+                  <input
+                    className="campo-busca"
+                    value={busca}
+                    onChange={(e) => setBusca(e.target.value)}
+                    placeholder="Buscar produto..."
+                  />
 
-              <div className="grade-produtos">
-                {produtosFiltrados.map((produto) => (
-                  <article className="produto-card" key={produto.id}>
-                    <img
-                      className="produto-imagem"
-                      src={
-                        produto.imagem_url.startsWith("http")
-                          ? produto.imagem_url
-                          : `http://localhost:3000/${produto.imagem_url.replace(/^\/+/, "")}`
-                      }
-                      alt={produto.nome}
-                      onError={(e) => {
-                        e.currentTarget.style.display = "none";
-                      }}
+                  <div className="grade-produtos">
+                    {produtosFiltrados.map((produto) => (
+                      <article className="produto-card" key={produto.id}>
+                        <img
+                          className="produto-imagem"
+                          src={
+                            produto.imagem_url?.startsWith("http")
+                              ? produto.imagem_url
+                              : `${API_URL}/${(produto.imagem_url || "").replace(/^\/+/, "")}`
+                          }
+                          alt={produto.nome}
+                          onError={(e) => {
+                            e.currentTarget.style.display = "none";
+                          }}
+                        />
+
+                        <div className="produto-info">
+                          <span className="produto-categoria">
+                            {produto.categoria}
+                          </span>
+
+                          <h3>{produto.nome}</h3>
+
+                          <p className="produto-descricao">
+                            {produto.descricao}
+                          </p>
+
+                          <div className="produto-dados">
+                            <strong>
+                              R$ {Number(produto.preco).toFixed(2)}
+                            </strong>
+
+                            <span>Estoque: {produto.estoque}</span>
+                          </div>
+
+                          <div className="acoes-registro">
+                            <button
+                              type="button"
+                              onClick={() => editarRegistro(produto)}
+                            >
+                              Editar
+                            </button>
+
+                            <button
+                              type="button"
+                              onClick={() => excluirRegistro(produto.id)}
+                            >
+                              Excluir
+                            </button>
+                          </div>
+                        </div>
+                      </article>
+                    ))}
+
+                    {produtosFiltrados.length === 0 && (
+                      <p className="estado-lista">
+                        Nenhum produto encontrado.
+                      </p>
+                    )}
+                  </div>
+                </>
+              )}
+
+              {modulo !== "produtos" &&
+                modulo !== "perfil" &&
+                !mostrarFormulario && (
+                  <>
+                    <input
+                      className="campo-busca"
+                      value={busca}
+                      onChange={(e) => setBusca(e.target.value)}
+                      placeholder={`Buscar ${titulos[modulo].toLowerCase()}...`}
                     />
 
-                    <div className="produto-info">
-                      <span className="produto-categoria">
-                        {produto.categoria}
-                      </span>
+                    <div className="tabela-responsiva">
+                      <table className="tabela-crud">
+                        <thead>
+                          <tr>
+                            <th>ID</th>
 
-                      <h3>{produto.nome}</h3>
+                            {Object.keys(formularios[modulo]).map((campo) => (
+                              <th key={campo}>
+                                {modulo === "vendas" && campo === "produto_id"
+                                  ? "Produto"
+                                  : campo === "data_venda"
+                                    ? "Data da venda"
+                                    : campo.replace("_", " ")}
+                              </th>
+                            ))}
 
-                      <p className="produto-descricao">
-                        {produto.descricao}
-                      </p>
+                            <th>Ações</th>
+                          </tr>
+                        </thead>
 
-                      <div className="produto-dados">
-                        <strong>
-                          R$ {Number(produto.preco).toFixed(2)}
-                        </strong>
+                        <tbody>
+                          {registrosFiltrados.map((registro) => (
+                            <tr key={registro.id}>
+                              <td>{registro.id}</td>
 
-                        <span>Estoque: {produto.estoque}</span>
-                      </div>
+                              {Object.keys(formularios[modulo]).map((campo) => (
+                                <td key={campo}>
+                                  {campo === "preco" || campo === "salario" ? (
+                                    `R$ ${Number(registro[campo] || 0).toFixed(2)}`
+                                  ) : campo === "produto_id" ? (
+                                    registro.produto ||
+                                    registro.produto_nome ||
+                                    registro.produto_id ||
+                                    "-"
+                                  ) : campo === "data_venda" ? (
+                                    formatarData(
+                                      registro.data_venda ||
+                                        String(registro[campo] || "")
+                                    )
+                                  ) : (
+                                    registro[campo] ?? "-"
+                                  )}
+                                </td>
+                              ))}
+
+                              <td>
+                                <div className="acoes-registro">
+                                  <button
+                                    type="button"
+                                    onClick={() => editarRegistro(registro)}
+                                  >
+                                    Editar
+                                  </button>
+
+                                  <button
+                                    type="button"
+                                    onClick={() =>
+                                      excluirRegistro(registro.id)
+                                    }
+                                  >
+                                    Excluir
+                                  </button>
+                                </div>
+                              </td>
+                            </tr>
+                          ))}
+
+                          {registrosFiltrados.length === 0 && (
+                            <tr>
+                              <td
+                                colSpan={
+                                  Object.keys(formularios[modulo]).length + 2
+                                }
+                              >
+                                Nenhum registro encontrado.
+                              </td>
+                            </tr>
+                          )}
+                        </tbody>
+                      </table>
                     </div>
-                  </article>
-                ))}
-
-                {produtosFiltrados.length === 0 && (
-                  <p className="estado-lista">
-                    Nenhum produto encontrado.
-                  </p>
+                  </>
                 )}
-              </div>
             </div>
           )}
         </div>
@@ -580,4 +1048,3 @@ function App() {
 }
 
 export default App;
-
