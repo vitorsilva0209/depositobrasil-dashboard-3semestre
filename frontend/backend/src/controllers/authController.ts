@@ -3,7 +3,7 @@ import {
   registrarUsuario,
   autenticarUsuario
 } from "../services/authService";
-import jwt from "jsonwebtoken";
+
 
 export async function registrar(req: Request, res: Response) {
   try {

@@ -1,19 +1,20 @@
 
-import { useEffect, useState, type FormEvent } from "react";
+import { useEffect, useRef, useState, type FormEvent } from "react";
+import { AuthProvider } from "./contexts/AuthContext";
+import { useAuth } from "./contexts/useAuth";
+import type { Usuario } from "./contexts/authContextCore";
 import "./App.css";
 
 const API_URL = "http://localhost:3000";
+const ITENS_POR_PAGINA = 5;
 
 type Tela = "login" | "cadastro" | "dashboard";
-type Modulo = "produtos" | "clientes" | "funcionarios" | "vendas" | "perfil";
-
-type Usuario = {
-  id?: number;
-  nome?: string;
-  email?: string;
-  cpf?: string;
-  usuario?: string;
-};
+type Modulo =
+  | "produtos"
+  | "clientes"
+  | "funcionarios"
+  | "vendas"
+  | "perfil";
 
 type Produto = {
   id: number;
@@ -36,7 +37,10 @@ type Registro = {
 
 type DadosFormulario = Record<string, string | number>;
 
-const formularios: Record<Exclude<Modulo, "perfil">, Record<string, string>> = {
+const formularios: Record<
+  Exclude<Modulo, "perfil">,
+  Record<string, string>
+> = {
   produtos: {
     nome: "",
     categoria: "",
@@ -70,7 +74,7 @@ const rotas: Record<Exclude<Modulo, "perfil">, string> = {
 };
 
 function validarEmail(email: string): boolean {
-  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim());
 }
 
 function validarCPF(cpf: string): boolean {
@@ -101,6 +105,16 @@ function validarCPF(cpf: string): boolean {
   if (digito === 10) digito = 0;
 
   return digito === Number(numero[10]);
+}
+
+function validarSenhaForte(senha: string): boolean {
+  return (
+    senha.length >= 8 &&
+    /[A-Z]/.test(senha) &&
+    /[a-z]/.test(senha) &&
+    /\d/.test(senha) &&
+    /[^A-Za-z0-9]/.test(senha)
+  );
 }
 
 function formatarData(data: string | undefined): string {
@@ -152,6 +166,10 @@ async function requisicaoAPI(
 
   const resultado = await resposta.json().catch(() => ({}));
 
+  if (resposta.status === 401 && token) {
+    window.dispatchEvent(new Event("sessao-expirada"));
+  }
+
   if (!resposta.ok) {
     throw new Error(resultado.mensagem || "Erro na requisição.");
   }
@@ -159,19 +177,30 @@ async function requisicaoAPI(
   return resultado;
 }
 
-function App() {
-  const [tela, setTela] = useState<Tela>("login");
+function AppConteudo() {
+  const {
+    usuario,
+    token,
+    autenticado,
+    entrar,
+    atualizarUsuario,
+    sair: sairContexto,
+  } = useAuth();
+
+  const [tela, setTela] = useState<Tela>(
+    autenticado ? "dashboard" : "login"
+  );
+
   const [modulo, setModulo] = useState<Modulo>("produtos");
 
   const [nome, setNome] = useState("");
   const [email, setEmail] = useState("");
   const [senha, setSenha] = useState("");
+  const [confirmarSenhaCadastro, setConfirmarSenhaCadastro] = useState("");
   const [cpf, setCpf] = useState("");
 
-  const [usuario, setUsuario] = useState<Usuario | null>(null);
-  const [token, setToken] = useState("");
-
   const [produtos, setProdutos] = useState<Produto[]>([]);
+  const [totalProdutos, setTotalProdutos] = useState(0);
   const [registros, setRegistros] = useState<Registro[]>([]);
 
   const [perfil, setPerfil] = useState<Usuario>({
@@ -181,6 +210,10 @@ function App() {
     usuario: "",
   });
 
+  const [senhaAtual, setSenhaAtual] = useState("");
+  const [novaSenha, setNovaSenha] = useState("");
+  const [confirmarNovaSenha, setConfirmarNovaSenha] = useState("");
+
   const [formulario, setFormulario] = useState<Record<string, string>>({});
   const [busca, setBusca] = useState("");
   const [mensagem, setMensagem] = useState("");
@@ -188,30 +221,69 @@ function App() {
   const [editandoId, setEditandoId] = useState<number | null>(null);
   const [mostrarFormulario, setMostrarFormulario] = useState(false);
 
+  const [paginaAtual, setPaginaAtual] = useState(1);
+  const [totalPaginas, setTotalPaginas] = useState(1);
+
+  useEffect(() => {
+    function tratarSessaoExpirada() {
+      sairContexto();
+
+      setProdutos([]);
+      setTotalProdutos(0);
+      setRegistros([]);
+      setTela("login");
+      setModulo("produtos");
+      setMostrarFormulario(false);
+      setEditandoId(null);
+      setFormulario({});
+      setBusca("");
+      setPaginaAtual(1);
+      setMensagem("Sua sessão expirou. Entre novamente.");
+      setSenha("");
+      setSenhaAtual("");
+      setNovaSenha("");
+      setConfirmarNovaSenha("");
+    }
+
+    window.addEventListener("sessao-expirada", tratarSessaoExpirada);
+
+    return () => {
+      window.removeEventListener("sessao-expirada", tratarSessaoExpirada);
+    };
+  }, [sairContexto]);
+
   async function fazerLogin(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();
     setMensagem("");
-    setCarregando(true);
 
     try {
       if (!validarEmail(email)) {
         throw new Error("Digite um e-mail válido.");
       }
 
+      setCarregando(true);
+
       const resultado = await requisicaoAPI(
         "/api/auth/login",
         "POST",
-        { email, senha }
+        {
+          email: email.trim().toLowerCase(),
+          senha,
+        }
       );
 
       if (!resultado.token) {
         throw new Error("A API não retornou o token de acesso.");
       }
 
-      setToken(resultado.token);
-      setUsuario(resultado.usuario || resultado.user || {});
+      const dadosUsuario: Usuario =
+        resultado.usuario || resultado.user || {};
+
+      entrar(resultado.token, dadosUsuario);
+
       setTela("dashboard");
       setMensagem("Login realizado com sucesso!");
+      setSenha("");
     } catch (erro) {
       setMensagem(
         erro instanceof Error ? erro.message : "Erro ao fazer login."
@@ -224,27 +296,42 @@ function App() {
   async function fazerCadastro(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();
     setMensagem("");
-    setCarregando(true);
 
     try {
-      if (!nome.trim()) throw new Error("Informe seu nome.");
-      if (!validarEmail(email)) throw new Error("Digite um e-mail válido.");
+      if (!nome.trim()) {
+        throw new Error("Informe seu nome.");
+      }
 
-      const senhaForte =
-        /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[^A-Za-z0-9]).{8,}$/;
+      if (!validarEmail(email)) {
+        throw new Error("Digite um e-mail válido.");
+      }
 
-      if (!senhaForte.test(senha)) {
+      if (!validarCPF(cpf)) {
+        throw new Error("CPF inválido.");
+      }
+
+      if (!validarSenhaForte(senha)) {
         throw new Error(
           "A senha deve ter pelo menos 8 caracteres, letra maiúscula, minúscula, número e caractere especial."
         );
       }
 
-      if (!validarCPF(cpf)) throw new Error("CPF inválido.");
+      if (senha !== confirmarSenhaCadastro) {
+        throw new Error("As senhas não coincidem.");
+      }
+
+      setCarregando(true);
 
       const resultado = await requisicaoAPI(
         "/api/auth/registrar",
         "POST",
-        { nome, email, senha, cpf: cpf.replace(/\D/g, "") }
+        {
+          nome: nome.trim(),
+          email: email.trim().toLowerCase(),
+          senha,
+          confirmarSenha: confirmarSenhaCadastro,
+          cpf: cpf.replace(/\D/g, ""),
+        }
       );
 
       setMensagem(resultado.mensagem || "Cadastro realizado com sucesso!");
@@ -252,58 +339,10 @@ function App() {
       setNome("");
       setCpf("");
       setSenha("");
+      setConfirmarSenhaCadastro("");
     } catch (erro) {
       setMensagem(
         erro instanceof Error ? erro.message : "Erro ao cadastrar."
-      );
-    } finally {
-      setCarregando(false);
-    }
-  }
-
-  async function carregarProdutos() {
-    try {
-      const resultado = await requisicaoAPI("/api/produtos", "GET");
-      setProdutos(resultado.produtos || []);
-    } catch (erro) {
-      setMensagem(
-        erro instanceof Error ? erro.message : "Erro ao carregar produtos."
-      );
-    }
-  }
-
-  async function carregarModulo(alvo: Modulo = modulo) {
-    if (alvo === "perfil") {
-      await carregarPerfil();
-      return;
-    }
-
-    try {
-      setCarregando(true);
-
-      const resultado = await requisicaoAPI(
-        `${rotas[alvo]}?pagina=1&limite=100`,
-        "GET",
-        undefined,
-        token
-      );
-
-      const lista =
-        resultado[alvo] ||
-        resultado.registros ||
-        resultado.dados ||
-        [];
-
-      setRegistros(Array.isArray(lista) ? lista : []);
-
-      if (alvo === "produtos") {
-        setProdutos(Array.isArray(lista) ? lista : []);
-      }
-    } catch (erro) {
-      setMensagem(
-        erro instanceof Error
-          ? erro.message
-          : `Erro ao carregar ${alvo}.`
       );
     } finally {
       setCarregando(false);
@@ -321,17 +360,99 @@ function App() {
 
       const dados = resultado.usuario || resultado;
 
-      setPerfil({
+      const usuarioAtualizado: Usuario = {
+        id: dados.id,
         nome: dados.nome || "",
         email: dados.email || "",
         cpf: dados.cpf || "",
         usuario: dados.usuario || "",
-      });
+      };
+
+      setPerfil(usuarioAtualizado);
+      atualizarUsuario(usuarioAtualizado);
     } catch (erro) {
       setMensagem(
         erro instanceof Error ? erro.message : "Erro ao carregar perfil."
       );
     }
+  }
+
+  async function carregarModulo(
+    alvo: Modulo = modulo,
+    pagina = paginaAtual,
+    termoBusca = busca
+  ) {
+    if (alvo === "perfil") {
+      await carregarPerfil();
+      return;
+    }
+
+    try {
+      setCarregando(true);
+
+      const parametros = new URLSearchParams({
+        pagina: String(pagina),
+        limite: String(ITENS_POR_PAGINA),
+        busca: termoBusca,
+      });
+
+      const resultado = await requisicaoAPI(
+        `${rotas[alvo]}?${parametros.toString()}`,
+        "GET",
+        undefined,
+        token
+      );
+
+      const lista =
+        resultado[alvo] ||
+        resultado.registros ||
+        resultado.dados ||
+        [];
+
+      const dados = Array.isArray(lista) ? lista : [];
+
+      setRegistros(dados);
+
+      if (alvo === "produtos") {
+        setProdutos(dados as Produto[]);
+
+        // Atualiza o contador geral quando a busca está vazia.
+        if (!termoBusca.trim()) {
+          setTotalProdutos(
+            Number(resultado.totalRegistros ?? dados.length)
+          );
+        }
+      }
+
+      const paginas = Number(
+        resultado.totalPaginas ||
+          resultado.paginas ||
+          resultado.total_pages ||
+          1
+      );
+
+      setTotalPaginas(Math.max(1, paginas));
+    } catch (erro) {
+      setMensagem(
+        erro instanceof Error
+          ? erro.message
+          : `Erro ao carregar ${alvo}.`
+      );
+    } finally {
+      setCarregando(false);
+    }
+  }
+
+  const carregarModuloRef = useRef(carregarModulo);
+
+  useEffect(() => {
+    carregarModuloRef.current = carregarModulo;
+  });
+
+  function limparCamposSenhaPerfil() {
+    setSenhaAtual("");
+    setNovaSenha("");
+    setConfirmarNovaSenha("");
   }
 
   function abrirModulo(alvo: Modulo) {
@@ -340,11 +461,11 @@ function App() {
     setMensagem("");
     setEditandoId(null);
     setMostrarFormulario(false);
+    setPaginaAtual(1);
+    limparCamposSenhaPerfil();
 
     if (alvo === "perfil") {
-      carregarPerfil();
-    } else {
-      carregarModulo(alvo);
+      void carregarPerfil();
     }
   }
 
@@ -390,15 +511,49 @@ function App() {
       const dados: DadosFormulario = { ...formulario };
 
       if (modulo === "produtos") {
+        if (!String(dados.nome || "").trim()) {
+          throw new Error("Informe o nome do produto.");
+        }
+
+        if (Number(dados.preco) < 0 || Number(dados.estoque) < 0) {
+          throw new Error("Preço e estoque não podem ser negativos.");
+        }
+
         dados.preco = Number(dados.preco);
         dados.estoque = Number(dados.estoque);
       }
 
+      if (modulo === "clientes") {
+        if (!String(dados.nome || "").trim()) {
+          throw new Error("Informe o nome do cliente.");
+        }
+
+        if (dados.email && !validarEmail(String(dados.email))) {
+          throw new Error("Digite um e-mail válido para o cliente.");
+        }
+      }
+
       if (modulo === "funcionarios") {
+        if (!String(dados.nome || "").trim()) {
+          throw new Error("Informe o nome do funcionário.");
+        }
+
+        if (Number(dados.salario) < 0) {
+          throw new Error("O salário não pode ser negativo.");
+        }
+
         dados.salario = Number(dados.salario);
       }
 
       if (modulo === "vendas") {
+        if (!dados.produto_id || Number(dados.produto_id) <= 0) {
+          throw new Error("Selecione um produto.");
+        }
+
+        if (Number(dados.quantidade) <= 0) {
+          throw new Error("A quantidade deve ser maior que zero.");
+        }
+
         dados.produto_id = Number(dados.produto_id);
         dados.quantidade = Number(dados.quantidade);
       }
@@ -421,9 +576,12 @@ function App() {
 
       setMostrarFormulario(false);
       setEditandoId(null);
+      setFormulario({});
+      setBusca("");
+      setPaginaAtual(1);
 
-      await carregarModulo(modulo);
-      await carregarProdutos();
+      // Recarrega explicitamente a primeira página após salvar.
+      await carregarModulo(modulo, 1, "");
     } catch (erro) {
       setMensagem(
         erro instanceof Error ? erro.message : "Erro ao salvar registro."
@@ -438,11 +596,13 @@ function App() {
       return;
     }
 
+    if (modulo === "perfil") return;
+
     try {
       setCarregando(true);
 
       const resultado = await requisicaoAPI(
-        `${rotas[modulo as Exclude<Modulo, "perfil">]}/${id}`,
+        `${rotas[modulo]}/${id}`,
         "DELETE",
         undefined,
         token
@@ -450,8 +610,14 @@ function App() {
 
       setMensagem(resultado.mensagem || "Registro excluído com sucesso!");
 
-      await carregarModulo(modulo);
-      await carregarProdutos();
+      // Recarrega a página atual. Se ela ficar vazia, volta uma página.
+      const paginaDestino =
+        registros.length === 1 && paginaAtual > 1
+          ? paginaAtual - 1
+          : paginaAtual;
+
+      setPaginaAtual(paginaDestino);
+      await carregarModulo(modulo, paginaDestino, busca);
     } catch (erro) {
       setMensagem(
         erro instanceof Error
@@ -468,70 +634,139 @@ function App() {
     setMensagem("");
 
     try {
-      const nomeAtualizado = perfil.nome?.trim();
+      const nomeAtualizado = perfil.nome?.trim() || "";
+      const cpfAtualizado = perfil.cpf || "";
 
       if (!nomeAtualizado) {
         throw new Error("Informe seu nome.");
       }
 
-      if (!validarCPF(perfil.cpf || "")) {
+      if (!validarCPF(cpfAtualizado)) {
         throw new Error("CPF inválido.");
       }
+
+      const camposSenha = [
+        senhaAtual,
+        novaSenha,
+        confirmarNovaSenha,
+      ];
+
+      const desejaAlterarSenha = camposSenha.some(
+        (campo) => campo.length > 0
+      );
+
+      const dados: Record<string, string> = {
+        nome: nomeAtualizado,
+        cpf: cpfAtualizado.replace(/\D/g, ""),
+        usuario: perfil.usuario || "",
+      };
+
+      if (desejaAlterarSenha) {
+        if (
+          senhaAtual.length === 0 ||
+          novaSenha.length === 0 ||
+          confirmarNovaSenha.length === 0
+        ) {
+          throw new Error(
+            "Para alterar sua senha, preencha a senha atual, a nova senha e a confirmação."
+          );
+        }
+
+        if (!validarSenhaForte(novaSenha)) {
+          throw new Error(
+            "A nova senha deve ter pelo menos 8 caracteres, letra maiúscula, minúscula, número e caractere especial."
+          );
+        }
+
+        if (novaSenha !== confirmarNovaSenha) {
+          throw new Error("A confirmação da nova senha não coincide.");
+        }
+
+        if (novaSenha === senhaAtual) {
+          throw new Error(
+            "A nova senha deve ser diferente da senha atual."
+          );
+        }
+
+        dados.senhaAtual = senhaAtual;
+        dados.novaSenha = novaSenha;
+        dados.confirmarSenha = confirmarNovaSenha;
+      }
+
+      setCarregando(true);
 
       const resultado = await requisicaoAPI(
         "/api/usuarios/me",
         "PUT",
-        {
-          nome: nomeAtualizado,
-          cpf: perfil.cpf?.replace(/\D/g, ""),
-          usuario: perfil.usuario,
-        },
+        dados,
         token
       );
 
-      const nomeConfirmado =
-        resultado.usuario?.nome ||
-        resultado.nome ||
-        nomeAtualizado;
+      const dadosRetornados = resultado.usuario || {};
 
-      setUsuario((atual) => ({
-        ...atual,
-        nome: nomeConfirmado,
-      }));
+      const usuarioAtualizado: Usuario = {
+        ...perfil,
+        ...dadosRetornados,
+        nome: dadosRetornados.nome || nomeAtualizado,
+        cpf: dadosRetornados.cpf || dados.cpf,
+        usuario: dadosRetornados.usuario || perfil.usuario || "",
+        email: perfil.email,
+      };
 
-      setPerfil((atual) => ({
-        ...atual,
-        nome: nomeConfirmado,
-      }));
+      setPerfil(usuarioAtualizado);
+      atualizarUsuario(usuarioAtualizado);
 
-      setMensagem(resultado.mensagem || "Perfil atualizado com sucesso!");
+      limparCamposSenhaPerfil();
+
+      setMensagem(
+        resultado.mensagem || "Perfil atualizado com sucesso!"
+      );
     } catch (erro) {
       setMensagem(
         erro instanceof Error ? erro.message : "Erro ao atualizar perfil."
       );
+    } finally {
+      setCarregando(false);
     }
   }
 
   function sair() {
-    setToken("");
-    setUsuario(null);
+    sairContexto();
+
     setProdutos([]);
+    setTotalProdutos(0);
     setRegistros([]);
     setEmail("");
     setSenha("");
+    setNome("");
+    setCpf("");
+    setConfirmarSenhaCadastro("");
+    limparCamposSenhaPerfil();
     setMensagem("");
     setModulo("produtos");
     setMostrarFormulario(false);
     setEditandoId(null);
+    setFormulario({});
+    setBusca("");
+    setPaginaAtual(1);
     setTela("login");
   }
 
+  // Carrega automaticamente os registros quando muda a tela,
+  // o módulo, a página ou o termo de pesquisa.
   useEffect(() => {
-    if (tela === "dashboard") {
-      carregarProdutos();
-      carregarModulo("produtos");
+    if (tela !== "dashboard" || !token || modulo === "perfil") {
+      return;
     }
-  }, [tela]);
+
+    const temporizador = window.setTimeout(() => {
+      void carregarModuloRef.current(modulo);
+    }, 250);
+
+    return () => {
+      window.clearTimeout(temporizador);
+    };
+  }, [tela, token, modulo, paginaAtual, busca]);
 
   const produtosFiltrados = produtos.filter((produto) =>
     `${produto.nome} ${produto.categoria}`
@@ -584,7 +819,6 @@ function App() {
             required
           >
             <option value="">Selecione um produto</option>
-
             {produtos.map((produto) => (
               <option key={produto.id} value={produto.id}>
                 {produto.nome}
@@ -612,14 +846,11 @@ function App() {
     return (
       <label key={campo}>
         {nomes[campo] || campo}
-
         <input
           type={
             campo === "preco" || campo === "salario"
               ? "number"
-              : campo === "estoque" ||
-                  campo === "quantidade" ||
-                  campo === "produto_id"
+              : campo === "estoque" || campo === "quantidade"
                 ? "number"
                 : campo === "data_venda"
                   ? "datetime-local"
@@ -651,7 +882,6 @@ function App() {
             <h1>DEPÓSITO BRASIL</h1>
             <p>Materiais de Construção</p>
           </div>
-
           <span className="status-online">Sistema online</span>
         </header>
 
@@ -665,6 +895,7 @@ function App() {
               <label>E-mail</label>
               <input
                 type="email"
+                autoComplete="username"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 placeholder="Digite seu e-mail"
@@ -674,6 +905,7 @@ function App() {
               <label>Senha</label>
               <input
                 type="password"
+                autoComplete="current-password"
                 value={senha}
                 onChange={(e) => setSenha(e.target.value)}
                 placeholder="Digite sua senha"
@@ -686,7 +918,13 @@ function App() {
 
               <p>
                 Não possui conta?{" "}
-                <button type="button" onClick={() => setTela("cadastro")}>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setMensagem("");
+                    setTela("cadastro");
+                  }}
+                >
                   Criar conta
                 </button>
               </p>
@@ -724,9 +962,22 @@ function App() {
               <label>Senha</label>
               <input
                 type="password"
+                autoComplete="new-password"
                 value={senha}
                 onChange={(e) => setSenha(e.target.value)}
                 placeholder="Mínimo 8 caracteres"
+                required
+              />
+
+              <label>Confirmar senha</label>
+              <input
+                type="password"
+                autoComplete="new-password"
+                value={confirmarSenhaCadastro}
+                onChange={(e) =>
+                  setConfirmarSenhaCadastro(e.target.value)
+                }
+                placeholder="Digite a senha novamente"
                 required
               />
 
@@ -734,7 +985,13 @@ function App() {
                 {carregando ? "Cadastrando..." : "Cadastrar"}
               </button>
 
-              <button type="button" onClick={() => setTela("login")}>
+              <button
+                type="button"
+                onClick={() => {
+                  setMensagem("");
+                  setTela("login");
+                }}
+              >
                 Voltar ao login
               </button>
             </form>
@@ -755,7 +1012,7 @@ function App() {
 
               <div className="resumo">
                 <div className="resumo-card">
-                  <h3>{produtos.length}</h3>
+                  <h3>{totalProdutos}</h3>
                   <p>Produtos cadastrados</p>
                 </div>
 
@@ -794,7 +1051,7 @@ function App() {
                     <button
                       className="botao-atualizar"
                       type="button"
-                      onClick={() => carregarModulo(modulo)}
+                      onClick={() => void carregarModulo(modulo)}
                     >
                       Atualizar
                     </button>
@@ -820,7 +1077,11 @@ function App() {
                   />
 
                   <label>E-mail (não pode ser alterado)</label>
-                  <input value={perfil.email || ""} disabled />
+                  <input
+                    type="email"
+                    value={perfil.email || ""}
+                    disabled
+                  />
 
                   <label>CPF</label>
                   <input
@@ -828,6 +1089,8 @@ function App() {
                     onChange={(e) =>
                       setPerfil({ ...perfil, cpf: e.target.value })
                     }
+                    maxLength={14}
+                    placeholder="000.000.000-00"
                     required
                   />
 
@@ -839,7 +1102,53 @@ function App() {
                     }
                   />
 
-                  <button type="submit">Salvar perfil</button>
+                  <h3>Alterar senha</h3>
+
+                  <p>
+                    Se não quiser alterar sua senha, deixe os três campos
+                    abaixo vazios.
+                  </p>
+
+                  <label>Senha atual</label>
+                  <input
+                    type="password"
+                    name="senha-atual-perfil"
+                    autoComplete="current-password"
+                    value={senhaAtual}
+                    onChange={(e) => setSenhaAtual(e.target.value)}
+                    placeholder="Digite sua senha atual"
+                  />
+
+                  <label>Nova senha</label>
+                  <input
+                    type="password"
+                    name="nova-senha-perfil"
+                    autoComplete="new-password"
+                    value={novaSenha}
+                    onChange={(e) => setNovaSenha(e.target.value)}
+                    placeholder="Digite sua nova senha"
+                  />
+
+                  <label>Confirmar nova senha</label>
+                  <input
+                    type="password"
+                    name="confirmar-nova-senha-perfil"
+                    autoComplete="new-password"
+                    value={confirmarNovaSenha}
+                    onChange={(e) =>
+                      setConfirmarNovaSenha(e.target.value)
+                    }
+                    placeholder="Repita sua nova senha"
+                  />
+
+                  <p>
+                    A senha deve ter no mínimo 8 caracteres, incluindo
+                    maiúscula, minúscula, número e caractere especial.
+                  </p>
+
+                  <button type="submit" disabled={carregando}>
+                    {carregando ? "Salvando..." : "Salvar perfil"}
+                  </button>
                 </form>
               )}
 
@@ -866,6 +1175,7 @@ function App() {
                     onClick={() => {
                       setMostrarFormulario(false);
                       setEditandoId(null);
+                      setFormulario({});
                     }}
                   >
                     Cancelar
@@ -878,7 +1188,10 @@ function App() {
                   <input
                     className="campo-busca"
                     value={busca}
-                    onChange={(e) => setBusca(e.target.value)}
+                    onChange={(e) => {
+                      setBusca(e.target.value);
+                      setPaginaAtual(1);
+                    }}
                     placeholder="Buscar produto..."
                   />
 
@@ -913,7 +1226,6 @@ function App() {
                             <strong>
                               R$ {Number(produto.preco).toFixed(2)}
                             </strong>
-
                             <span>Estoque: {produto.estoque}</span>
                           </div>
 
@@ -942,6 +1254,35 @@ function App() {
                       </p>
                     )}
                   </div>
+
+                  {/* PAGINAÇÃO DOS CARTÕES DE PRODUTOS */}
+                  <div className="paginacao">
+                    <button
+                      type="button"
+                      disabled={paginaAtual <= 1 || carregando}
+                      onClick={() =>
+                        setPaginaAtual((pagina) => Math.max(1, pagina - 1))
+                      }
+                    >
+                      Anterior
+                    </button>
+
+                    <span>
+                      Página {paginaAtual} de {totalPaginas}
+                    </span>
+
+                    <button
+                      type="button"
+                      disabled={paginaAtual >= totalPaginas || carregando}
+                      onClick={() =>
+                        setPaginaAtual((pagina) =>
+                          Math.min(totalPaginas, pagina + 1)
+                        )
+                      }
+                    >
+                      Próxima
+                    </button>
+                  </div>
                 </>
               )}
 
@@ -952,7 +1293,10 @@ function App() {
                     <input
                       className="campo-busca"
                       value={busca}
-                      onChange={(e) => setBusca(e.target.value)}
+                      onChange={(e) => {
+                        setBusca(e.target.value);
+                        setPaginaAtual(1);
+                      }}
                       placeholder={`Buscar ${titulos[modulo].toLowerCase()}...`}
                     />
 
@@ -1012,9 +1356,7 @@ function App() {
 
                                   <button
                                     type="button"
-                                    onClick={() =>
-                                      excluirRegistro(registro.id)
-                                    }
+                                    onClick={() => excluirRegistro(registro.id)}
                                   >
                                     Excluir
                                   </button>
@@ -1037,6 +1379,34 @@ function App() {
                         </tbody>
                       </table>
                     </div>
+
+                    <div className="paginacao">
+                      <button
+                        type="button"
+                        disabled={paginaAtual <= 1 || carregando}
+                        onClick={() =>
+                          setPaginaAtual((pagina) => Math.max(1, pagina - 1))
+                        }
+                      >
+                        Anterior
+                      </button>
+
+                      <span>
+                        Página {paginaAtual} de {totalPaginas}
+                      </span>
+
+                      <button
+                        type="button"
+                        disabled={paginaAtual >= totalPaginas || carregando}
+                        onClick={() =>
+                          setPaginaAtual((pagina) =>
+                            Math.min(totalPaginas, pagina + 1)
+                          )
+                        }
+                      >
+                        Próxima
+                      </button>
+                    </div>
                   </>
                 )}
             </div>
@@ -1044,6 +1414,14 @@ function App() {
         </div>
       </section>
     </main>
+  );
+}
+
+function App() {
+  return (
+    <AuthProvider>
+      <AppConteudo />
+    </AuthProvider>
   );
 }
 

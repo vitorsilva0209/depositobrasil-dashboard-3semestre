@@ -2,22 +2,49 @@
 import { Router } from "express";
 import { database } from "../config/database";
 import { autenticarToken } from "../middlewares/authMiddleware";
-import { ResultSetHeader } from "mysql2";
+import { ResultSetHeader, RowDataPacket } from "mysql2";
 import { Produto } from "../models/produtosModel";
 
 const router = Router();
 
-router.get("/", async (_req, res) => {
+// Todas as rotas de produtos exigem autenticação.
+router.use(autenticarToken);
+
+// LISTAR PRODUTOS COM PAGINAÇÃO E BUSCA
+router.get("/", async (req, res) => {
   try {
-    const [produtos] = await database.query(`
-      SELECT id, nome, categoria, preco, descricao, imagem_url, estoque
-      FROM produtos
-      ORDER BY id DESC
-    `);
+    const pagina = Math.max(1, Number(req.query.pagina) || 1);
+    const limiteSolicitado = Number(req.query.limite) || 5;
+    const limite = Math.min(100, Math.max(1, limiteSolicitado));
+    const offset = (pagina - 1) * limite;
+    const busca = String(req.query.busca || "").trim();
+
+    const [produtos] = await database.execute<RowDataPacket[]>(
+      `SELECT id, nome, categoria, preco, descricao, imagem_url, estoque
+       FROM produtos
+       WHERE nome LIKE ? OR categoria LIKE ?
+       ORDER BY id DESC
+       LIMIT ? OFFSET ?`,
+      [`%${busca}%`, `%${busca}%`, limite, offset]
+    );
+
+    const [contagem] = await database.execute<RowDataPacket[]>(
+      `SELECT COUNT(*) AS total
+       FROM produtos
+       WHERE nome LIKE ? OR categoria LIKE ?`,
+      [`%${busca}%`, `%${busca}%`]
+    );
+
+    const totalRegistros = Number(contagem[0]?.total || 0);
+    const totalPaginas = Math.max(1, Math.ceil(totalRegistros / limite));
 
     return res.json({
       sucesso: true,
       produtos,
+      pagina,
+      limite,
+      totalRegistros,
+      totalPaginas,
     });
   } catch (erro) {
     console.error("Erro ao buscar produtos:", erro);
@@ -29,7 +56,8 @@ router.get("/", async (_req, res) => {
   }
 });
 
-router.post("/", autenticarToken, async (req, res) => {
+// CADASTRAR PRODUTO
+router.post("/", async (req, res) => {
   const {
     nome,
     categoria,
@@ -51,8 +79,8 @@ router.post("/", autenticarToken, async (req, res) => {
 
     const [resultado] = await database.execute<ResultSetHeader>(
       `INSERT INTO produtos
-      (nome, categoria, preco, descricao, imagem_url, estoque)
-      VALUES (?, ?, ?, ?, ?, ?)`,
+       (nome, categoria, preco, descricao, imagem_url, estoque)
+       VALUES (?, ?, ?, ?, ?, ?)`,
       [
         produto.nome,
         produto.categoria,
@@ -81,7 +109,8 @@ router.post("/", autenticarToken, async (req, res) => {
   }
 });
 
-router.put("/:id", autenticarToken, async (req, res) => {
+// EDITAR PRODUTO
+router.put("/:id", async (req, res) => {
   const id = Number(req.params.id);
 
   if (!Number.isInteger(id) || id <= 0) {
@@ -110,12 +139,12 @@ router.put("/:id", autenticarToken, async (req, res) => {
       Number(estoque)
     );
 
-    const [existentes] = await database.query(
+    const [existentes] = await database.execute<RowDataPacket[]>(
       "SELECT id FROM produtos WHERE id = ?",
       [id]
     );
 
-    if (!Array.isArray(existentes) || existentes.length === 0) {
+    if (existentes.length === 0) {
       return res.status(404).json({
         sucesso: false,
         mensagem: "Produto não encontrado.",
@@ -155,7 +184,8 @@ router.put("/:id", autenticarToken, async (req, res) => {
   }
 });
 
-router.delete("/:id", autenticarToken, async (req, res) => {
+// EXCLUIR PRODUTO
+router.delete("/:id", async (req, res) => {
   const id = Number(req.params.id);
 
   if (!Number.isInteger(id) || id <= 0) {
