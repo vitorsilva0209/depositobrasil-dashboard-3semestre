@@ -1,20 +1,41 @@
 
 import { useEffect, useRef, useState, type FormEvent } from "react";
+
 import { AuthProvider } from "./contexts/AuthContext";
 import { useAuth } from "./contexts/useAuth";
 import type { Usuario } from "./contexts/authContextCore";
+
+import {
+  validarEmail,
+  validarCPF,
+  validarSenhaForte,
+  formatarData,
+  formatarDataParaInput,
+} from "./utils/validacoes";
+
+import { API_URL, requisicaoAPI } from "./services/api";
+
 import "./App.css";
 
-const API_URL = "http://localhost:3000";
+// ============================================================
+// REQUISITO: PAGINAÇÃO
+// Define quantos registros serão exibidos por página.
+// ============================================================
+
 const ITENS_POR_PAGINA = 5;
 
 type Tela = "login" | "cadastro" | "dashboard";
+
 type Modulo =
   | "produtos"
   | "clientes"
   | "funcionarios"
   | "vendas"
   | "perfil";
+
+// ============================================================
+// TIPOS DOS DADOS UTILIZADOS NO FRONTEND
+// ============================================================
 
 type Produto = {
   id: number;
@@ -37,6 +58,11 @@ type Registro = {
 
 type DadosFormulario = Record<string, string | number>;
 
+// ============================================================
+// REQUISITO: QUATRO CRUDs
+// Define os campos dos formulários de cada módulo.
+// ============================================================
+
 const formularios: Record<
   Exclude<Modulo, "perfil">,
   Record<string, string>
@@ -49,16 +75,21 @@ const formularios: Record<
     imagem_url: "",
     estoque: "",
   },
+
   clientes: {
     nome: "",
     email: "",
     telefone: "",
   },
+
   funcionarios: {
     nome: "",
     cargo: "",
     salario: "",
   },
+
+  // REQUISITO: RELACIONAMENTO ENTRE VENDAS E PRODUTOS.
+  // A venda utiliza produto_id para identificar o produto relacionado.
   vendas: {
     produto_id: "",
     quantidade: "",
@@ -66,6 +97,7 @@ const formularios: Record<
   },
 };
 
+// Rotas da API para cada CRUD.
 const rotas: Record<Exclude<Modulo, "perfil">, string> = {
   produtos: "/api/produtos",
   clientes: "/api/clientes",
@@ -73,111 +105,12 @@ const rotas: Record<Exclude<Modulo, "perfil">, string> = {
   vendas: "/api/vendas",
 };
 
-function validarEmail(email: string): boolean {
-  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim());
-}
-
-function validarCPF(cpf: string): boolean {
-  const numero = cpf.replace(/\D/g, "");
-
-  if (numero.length !== 11 || /^(\d)\1+$/.test(numero)) {
-    return false;
-  }
-
-  let soma = 0;
-
-  for (let i = 0; i < 9; i++) {
-    soma += Number(numero[i]) * (10 - i);
-  }
-
-  let digito = (soma * 10) % 11;
-  if (digito === 10) digito = 0;
-
-  if (digito !== Number(numero[9])) return false;
-
-  soma = 0;
-
-  for (let i = 0; i < 10; i++) {
-    soma += Number(numero[i]) * (11 - i);
-  }
-
-  digito = (soma * 10) % 11;
-  if (digito === 10) digito = 0;
-
-  return digito === Number(numero[10]);
-}
-
-function validarSenhaForte(senha: string): boolean {
-  return (
-    senha.length >= 8 &&
-    /[A-Z]/.test(senha) &&
-    /[a-z]/.test(senha) &&
-    /\d/.test(senha) &&
-    /[^A-Za-z0-9]/.test(senha)
-  );
-}
-
-function formatarData(data: string | undefined): string {
-  if (!data) return "-";
-
-  const dataFormatada = new Date(data);
-
-  if (isNaN(dataFormatada.getTime())) return "-";
-
-  return dataFormatada.toLocaleString("pt-BR", {
-    day: "2-digit",
-    month: "2-digit",
-    year: "numeric",
-    hour: "2-digit",
-    minute: "2-digit",
-  });
-}
-
-function formatarDataParaInput(data: string | undefined): string {
-  if (!data) return "";
-
-  const dataFormatada = new Date(data);
-
-  if (isNaN(dataFormatada.getTime())) return "";
-
-  const ano = dataFormatada.getFullYear();
-  const mes = String(dataFormatada.getMonth() + 1).padStart(2, "0");
-  const dia = String(dataFormatada.getDate()).padStart(2, "0");
-  const hora = String(dataFormatada.getHours()).padStart(2, "0");
-  const minuto = String(dataFormatada.getMinutes()).padStart(2, "0");
-
-  return `${ano}-${mes}-${dia}T${hora}:${minuto}`;
-}
-
-async function requisicaoAPI(
-  rota: string,
-  metodo: string,
-  dados?: object,
-  token?: string
-) {
-  const resposta = await fetch(`${API_URL}${rota}`, {
-    method: metodo,
-    headers: {
-      "Content-Type": "application/json",
-      ...(token ? { Authorization: `Bearer ${token}` } : {}),
-    },
-    ...(dados ? { body: JSON.stringify(dados) } : {}),
-  });
-
-  const resultado = await resposta.json().catch(() => ({}));
-
-  if (resposta.status === 401 && token) {
-    window.dispatchEvent(new Event("sessao-expirada"));
-  }
-
-  if (!resposta.ok) {
-    throw new Error(resultado.mensagem || "Erro na requisição.");
-  }
-
-  return resultado;
-}
-
 function AppConteudo() {
+  // ==========================================================
+  // REQUISITO: AUTENTICAÇÃO
+  // Utiliza o contexto para acessar usuário, token e sessão.
+  // ==========================================================
+
   const {
     usuario,
     token,
@@ -193,15 +126,29 @@ function AppConteudo() {
 
   const [modulo, setModulo] = useState<Modulo>("produtos");
 
+  // ==========================================================
+  // ESTADOS DE LOGIN E CADASTRO
+  // ==========================================================
+
   const [nome, setNome] = useState("");
   const [email, setEmail] = useState("");
   const [senha, setSenha] = useState("");
-  const [confirmarSenhaCadastro, setConfirmarSenhaCadastro] = useState("");
+  const [confirmarSenhaCadastro, setConfirmarSenhaCadastro] =
+    useState("");
   const [cpf, setCpf] = useState("");
+
+  // ==========================================================
+  // ESTADOS DOS CRUDs
+  // ==========================================================
 
   const [produtos, setProdutos] = useState<Produto[]>([]);
   const [totalProdutos, setTotalProdutos] = useState(0);
   const [registros, setRegistros] = useState<Registro[]>([]);
+
+  // ==========================================================
+  // REQUISITO: EDIÇÃO DO PRÓPRIO PERFIL
+  // O e-mail será exibido, mas não poderá ser alterado.
+  // ==========================================================
 
   const [perfil, setPerfil] = useState<Usuario>({
     nome: "",
@@ -212,17 +159,35 @@ function AppConteudo() {
 
   const [senhaAtual, setSenhaAtual] = useState("");
   const [novaSenha, setNovaSenha] = useState("");
-  const [confirmarNovaSenha, setConfirmarNovaSenha] = useState("");
+  const [confirmarNovaSenha, setConfirmarNovaSenha] =
+    useState("");
 
-  const [formulario, setFormulario] = useState<Record<string, string>>({});
+  // ==========================================================
+  // ESTADOS DOS FORMULÁRIOS, PESQUISA E PAGINAÇÃO
+  // ==========================================================
+
+  const [formulario, setFormulario] = useState<
+    Record<string, string>
+  >({});
+
   const [busca, setBusca] = useState("");
   const [mensagem, setMensagem] = useState("");
   const [carregando, setCarregando] = useState(false);
-  const [editandoId, setEditandoId] = useState<number | null>(null);
+
+  const [editandoId, setEditandoId] = useState<number | null>(
+    null
+  );
+
   const [mostrarFormulario, setMostrarFormulario] = useState(false);
 
   const [paginaAtual, setPaginaAtual] = useState(1);
   const [totalPaginas, setTotalPaginas] = useState(1);
+
+  // ==========================================================
+  // REQUISITO: CONTROLE DE SESSÃO
+  // Quando a API informar que a sessão expirou, o usuário
+  // retorna para a tela de login.
+  // ==========================================================
 
   useEffect(() => {
     function tratarSessaoExpirada() {
@@ -238,19 +203,33 @@ function AppConteudo() {
       setFormulario({});
       setBusca("");
       setPaginaAtual(1);
+
       setMensagem("Sua sessão expirou. Entre novamente.");
+
       setSenha("");
       setSenhaAtual("");
       setNovaSenha("");
       setConfirmarNovaSenha("");
     }
 
-    window.addEventListener("sessao-expirada", tratarSessaoExpirada);
+    window.addEventListener(
+      "sessao-expirada",
+      tratarSessaoExpirada
+    );
 
     return () => {
-      window.removeEventListener("sessao-expirada", tratarSessaoExpirada);
+      window.removeEventListener(
+        "sessao-expirada",
+        tratarSessaoExpirada
+      );
     };
   }, [sairContexto]);
+
+  // ==========================================================
+  // REQUISITO: LOGIN COM E-MAIL E SENHA
+  // Valida o e-mail e envia as credenciais para a API.
+  // A API deve validar a senha e devolver o JWT.
+  // ==========================================================
 
   async function fazerLogin(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();
@@ -273,12 +252,15 @@ function AppConteudo() {
       );
 
       if (!resultado.token) {
-        throw new Error("A API não retornou o token de acesso.");
+        throw new Error(
+          "A API não retornou o token de acesso."
+        );
       }
 
       const dadosUsuario: Usuario =
         resultado.usuario || resultado.user || {};
 
+      // Armazena o token e os dados do usuário no contexto.
       entrar(resultado.token, dadosUsuario);
 
       setTela("dashboard");
@@ -286,12 +268,20 @@ function AppConteudo() {
       setSenha("");
     } catch (erro) {
       setMensagem(
-        erro instanceof Error ? erro.message : "Erro ao fazer login."
+        erro instanceof Error
+          ? erro.message
+          : "Erro ao fazer login."
       );
     } finally {
       setCarregando(false);
     }
   }
+
+  // ==========================================================
+  // REQUISITO: CADASTRO DE USUÁRIO
+  // Valida nome, e-mail, CPF, senha forte e confirmação.
+  // O backend deve armazenar a senha usando hash seguro.
+  // ==========================================================
 
   async function fazerCadastro(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();
@@ -334,7 +324,11 @@ function AppConteudo() {
         }
       );
 
-      setMensagem(resultado.mensagem || "Cadastro realizado com sucesso!");
+      setMensagem(
+        resultado.mensagem ||
+          "Cadastro realizado com sucesso!"
+      );
+
       setTela("login");
       setNome("");
       setCpf("");
@@ -342,12 +336,19 @@ function AppConteudo() {
       setConfirmarSenhaCadastro("");
     } catch (erro) {
       setMensagem(
-        erro instanceof Error ? erro.message : "Erro ao cadastrar."
+        erro instanceof Error
+          ? erro.message
+          : "Erro ao cadastrar."
       );
     } finally {
       setCarregando(false);
     }
   }
+
+  // ==========================================================
+  // REQUISITO: CONSULTA DO PRÓPRIO PERFIL
+  // Consulta os dados do usuário autenticado.
+  // ==========================================================
 
   async function carregarPerfil() {
     try {
@@ -372,10 +373,18 @@ function AppConteudo() {
       atualizarUsuario(usuarioAtualizado);
     } catch (erro) {
       setMensagem(
-        erro instanceof Error ? erro.message : "Erro ao carregar perfil."
+        erro instanceof Error
+          ? erro.message
+          : "Erro ao carregar perfil."
       );
     }
   }
+
+  // ==========================================================
+  // REQUISITO: LEITURA DOS QUATRO CRUDs
+  // Consulta os registros na API usando o token JWT.
+  // Também envia os parâmetros de pesquisa e paginação.
+  // ==========================================================
 
   async function carregarModulo(
     alvo: Modulo = modulo,
@@ -416,7 +425,6 @@ function AppConteudo() {
       if (alvo === "produtos") {
         setProdutos(dados as Produto[]);
 
-        // Atualiza o contador geral quando a busca está vazia.
         if (!termoBusca.trim()) {
           setTotalProdutos(
             Number(resultado.totalRegistros ?? dados.length)
@@ -424,6 +432,7 @@ function AppConteudo() {
         }
       }
 
+      // Atualiza o total de páginas informado pela API.
       const paginas = Number(
         resultado.totalPaginas ||
           resultado.paginas ||
@@ -443,6 +452,7 @@ function AppConteudo() {
     }
   }
 
+  // Referência utilizada para carregar os dados no useEffect.
   const carregarModuloRef = useRef(carregarModulo);
 
   useEffect(() => {
@@ -454,6 +464,10 @@ function AppConteudo() {
     setNovaSenha("");
     setConfirmarNovaSenha("");
   }
+
+  // ==========================================================
+  // NAVEGAÇÃO ENTRE OS MÓDULOS
+  // ==========================================================
 
   function abrirModulo(alvo: Modulo) {
     setModulo(alvo);
@@ -469,6 +483,11 @@ function AppConteudo() {
     }
   }
 
+  // ==========================================================
+  // REQUISITO: CREATE DOS QUATRO CRUDs
+  // Prepara um formulário vazio para cadastrar um registro.
+  // ==========================================================
+
   function abrirNovoRegistro() {
     if (modulo === "perfil") return;
 
@@ -477,6 +496,11 @@ function AppConteudo() {
     setMostrarFormulario(true);
     setMensagem("");
   }
+
+  // ==========================================================
+  // REQUISITO: UPDATE DOS QUATRO CRUDs
+  // Preenche o formulário com os dados do registro escolhido.
+  // ==========================================================
 
   function editarRegistro(registro: Registro) {
     if (modulo === "perfil") return;
@@ -499,6 +523,11 @@ function AppConteudo() {
     setMensagem("");
   }
 
+  // ==========================================================
+  // REQUISITO: CREATE E UPDATE DOS QUATRO CRUDs
+  // Valida os dados e envia POST ou PUT para a API.
+  // ==========================================================
+
   async function salvarRegistro(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();
     setMensagem("");
@@ -510,48 +539,74 @@ function AppConteudo() {
 
       const dados: DadosFormulario = { ...formulario };
 
+      // Validações de produtos.
       if (modulo === "produtos") {
         if (!String(dados.nome || "").trim()) {
           throw new Error("Informe o nome do produto.");
         }
 
-        if (Number(dados.preco) < 0 || Number(dados.estoque) < 0) {
-          throw new Error("Preço e estoque não podem ser negativos.");
+        if (
+          Number(dados.preco) < 0 ||
+          Number(dados.estoque) < 0
+        ) {
+          throw new Error(
+            "Preço e estoque não podem ser negativos."
+          );
         }
 
         dados.preco = Number(dados.preco);
         dados.estoque = Number(dados.estoque);
       }
 
+      // Validações de clientes.
       if (modulo === "clientes") {
         if (!String(dados.nome || "").trim()) {
           throw new Error("Informe o nome do cliente.");
         }
 
-        if (dados.email && !validarEmail(String(dados.email))) {
-          throw new Error("Digite um e-mail válido para o cliente.");
+        if (
+          dados.email &&
+          !validarEmail(String(dados.email))
+        ) {
+          throw new Error(
+            "Digite um e-mail válido para o cliente."
+          );
         }
       }
 
+      // Validações de funcionários.
       if (modulo === "funcionarios") {
         if (!String(dados.nome || "").trim()) {
           throw new Error("Informe o nome do funcionário.");
         }
 
         if (Number(dados.salario) < 0) {
-          throw new Error("O salário não pode ser negativo.");
+          throw new Error(
+            "O salário não pode ser negativo."
+          );
         }
 
         dados.salario = Number(dados.salario);
       }
 
+      // ========================================================
+      // REQUISITO: RELACIONAMENTO DE VENDAS COM PRODUTOS
+      // A venda precisa selecionar um produto existente.
+      // O backend também deve validar a existência desse produto.
+      // ========================================================
+
       if (modulo === "vendas") {
-        if (!dados.produto_id || Number(dados.produto_id) <= 0) {
+        if (
+          !dados.produto_id ||
+          Number(dados.produto_id) <= 0
+        ) {
           throw new Error("Selecione um produto.");
         }
 
         if (Number(dados.quantidade) <= 0) {
-          throw new Error("A quantidade deve ser maior que zero.");
+          throw new Error(
+            "A quantidade deve ser maior que zero."
+          );
         }
 
         dados.produto_id = Number(dados.produto_id);
@@ -560,8 +615,11 @@ function AppConteudo() {
 
       const rota = rotas[modulo];
 
+      // POST cadastra. PUT atualiza o registro selecionado.
       const resultado = await requisicaoAPI(
-        editandoId ? `${rota}/${editandoId}` : rota,
+        editandoId
+          ? `${rota}/${editandoId}`
+          : rota,
         editandoId ? "PUT" : "POST",
         dados,
         token
@@ -580,19 +638,30 @@ function AppConteudo() {
       setBusca("");
       setPaginaAtual(1);
 
-      // Recarrega explicitamente a primeira página após salvar.
       await carregarModulo(modulo, 1, "");
     } catch (erro) {
       setMensagem(
-        erro instanceof Error ? erro.message : "Erro ao salvar registro."
+        erro instanceof Error
+          ? erro.message
+          : "Erro ao salvar registro."
       );
     } finally {
       setCarregando(false);
     }
   }
 
+  // ==========================================================
+  // REQUISITO: DELETE DOS QUATRO CRUDs
+  // Solicita confirmação e envia DELETE para a API.
+  // A API deve verificar se o registro existe antes de excluir.
+  // ==========================================================
+
   async function excluirRegistro(id: number) {
-    if (!window.confirm("Tem certeza que deseja excluir este registro?")) {
+    if (
+      !window.confirm(
+        "Tem certeza que deseja excluir este registro?"
+      )
+    ) {
       return;
     }
 
@@ -608,16 +677,25 @@ function AppConteudo() {
         token
       );
 
-      setMensagem(resultado.mensagem || "Registro excluído com sucesso!");
+      setMensagem(
+        resultado.mensagem ||
+          "Registro excluído com sucesso!"
+      );
 
-      // Recarrega a página atual. Se ela ficar vazia, volta uma página.
+      // Se a página ficar vazia após a exclusão,
+      // retorna para a página anterior.
       const paginaDestino =
         registros.length === 1 && paginaAtual > 1
           ? paginaAtual - 1
           : paginaAtual;
 
       setPaginaAtual(paginaDestino);
-      await carregarModulo(modulo, paginaDestino, busca);
+
+      await carregarModulo(
+        modulo,
+        paginaDestino,
+        busca
+      );
     } catch (erro) {
       setMensagem(
         erro instanceof Error
@@ -628,6 +706,12 @@ function AppConteudo() {
       setCarregando(false);
     }
   }
+
+  // ==========================================================
+  // REQUISITO: EDIÇÃO DO PRÓPRIO USUÁRIO
+  // Atualiza somente os dados do usuário autenticado.
+  // O e-mail não é enviado para alteração.
+  // ==========================================================
 
   async function salvarPerfil(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();
@@ -655,6 +739,7 @@ function AppConteudo() {
         (campo) => campo.length > 0
       );
 
+      // O e-mail não faz parte dos dados enviados para atualização.
       const dados: Record<string, string> = {
         nome: nomeAtualizado,
         cpf: cpfAtualizado.replace(/\D/g, ""),
@@ -679,7 +764,9 @@ function AppConteudo() {
         }
 
         if (novaSenha !== confirmarNovaSenha) {
-          throw new Error("A confirmação da nova senha não coincide.");
+          throw new Error(
+            "A confirmação da nova senha não coincide."
+          );
         }
 
         if (novaSenha === senhaAtual) {
@@ -709,7 +796,8 @@ function AppConteudo() {
         ...dadosRetornados,
         nome: dadosRetornados.nome || nomeAtualizado,
         cpf: dadosRetornados.cpf || dados.cpf,
-        usuario: dadosRetornados.usuario || perfil.usuario || "",
+        usuario:
+          dadosRetornados.usuario || perfil.usuario || "",
         email: perfil.email,
       };
 
@@ -719,16 +807,24 @@ function AppConteudo() {
       limparCamposSenhaPerfil();
 
       setMensagem(
-        resultado.mensagem || "Perfil atualizado com sucesso!"
+        resultado.mensagem ||
+          "Perfil atualizado com sucesso!"
       );
     } catch (erro) {
       setMensagem(
-        erro instanceof Error ? erro.message : "Erro ao atualizar perfil."
+        erro instanceof Error
+          ? erro.message
+          : "Erro ao atualizar perfil."
       );
     } finally {
       setCarregando(false);
     }
   }
+
+  // ==========================================================
+  // REQUISITO: ENCERRAMENTO DA SESSÃO
+  // Limpa os dados locais e retorna para o login.
+  // ==========================================================
 
   function sair() {
     sairContexto();
@@ -741,7 +837,9 @@ function AppConteudo() {
     setNome("");
     setCpf("");
     setConfirmarSenhaCadastro("");
+
     limparCamposSenhaPerfil();
+
     setMensagem("");
     setModulo("produtos");
     setMostrarFormulario(false);
@@ -752,10 +850,17 @@ function AppConteudo() {
     setTela("login");
   }
 
-  // Carrega automaticamente os registros quando muda a tela,
-  // o módulo, a página ou o termo de pesquisa.
+  // ==========================================================
+  // REQUISITO: PESQUISA E PAGINAÇÃO
+  // Recarrega os dados quando o módulo, página ou pesquisa muda.
+  // ==========================================================
+
   useEffect(() => {
-    if (tela !== "dashboard" || !token || modulo === "perfil") {
+    if (
+      tela !== "dashboard" ||
+      !token ||
+      modulo === "perfil"
+    ) {
       return;
     }
 
@@ -768,12 +873,14 @@ function AppConteudo() {
     };
   }, [tela, token, modulo, paginaAtual, busca]);
 
+  // Filtra os produtos apresentados na página carregada.
   const produtosFiltrados = produtos.filter((produto) =>
     `${produto.nome} ${produto.categoria}`
       .toLowerCase()
       .includes(busca.toLowerCase())
   );
 
+  // Filtra os registros apresentados na página carregada.
   const registrosFiltrados = registros.filter((registro) =>
     Object.values(registro)
       .map((valor) => String(valor ?? ""))
@@ -789,6 +896,10 @@ function AppConteudo() {
     vendas: "Vendas",
     perfil: "Meu perfil",
   };
+
+  // ==========================================================
+  // CAMPOS DINÂMICOS DOS FORMULÁRIOS
+  // ==========================================================
 
   function campoFormulario(campo: string) {
     const nomes: Record<string, string> = {
@@ -807,18 +918,24 @@ function AppConteudo() {
       data_venda: "Data da venda",
     };
 
+    // Campo de seleção para o relacionamento venda-produto.
     if (campo === "produto_id") {
       return (
         <label key={campo}>
           {nomes[campo]}
+
           <select
             value={formulario[campo] || ""}
             onChange={(e) =>
-              setFormulario({ ...formulario, [campo]: e.target.value })
+              setFormulario({
+                ...formulario,
+                [campo]: e.target.value,
+              })
             }
             required
           >
             <option value="">Selecione um produto</option>
+
             {produtos.map((produto) => (
               <option key={produto.id} value={produto.id}>
                 {produto.nome}
@@ -833,10 +950,14 @@ function AppConteudo() {
       return (
         <label key={campo}>
           {nomes[campo]}
+
           <textarea
             value={formulario[campo] || ""}
             onChange={(e) =>
-              setFormulario({ ...formulario, [campo]: e.target.value })
+              setFormulario({
+                ...formulario,
+                [campo]: e.target.value,
+              })
             }
           />
         </label>
@@ -846,11 +967,13 @@ function AppConteudo() {
     return (
       <label key={campo}>
         {nomes[campo] || campo}
+
         <input
           type={
             campo === "preco" || campo === "salario"
               ? "number"
-              : campo === "estoque" || campo === "quantidade"
+              : campo === "estoque" ||
+                  campo === "quantidade"
                 ? "number"
                 : campo === "data_venda"
                   ? "datetime-local"
@@ -859,20 +982,39 @@ function AppConteudo() {
                     : "text"
           }
           min={
-            ["preco", "salario", "estoque", "quantidade"].includes(campo)
+            [
+              "preco",
+              "salario",
+              "estoque",
+              "quantidade",
+            ].includes(campo)
               ? "0"
               : undefined
           }
-          step={["preco", "salario"].includes(campo) ? "0.01" : undefined}
+          step={
+            ["preco", "salario"].includes(campo)
+              ? "0.01"
+              : undefined
+          }
           value={formulario[campo] || ""}
           onChange={(e) =>
-            setFormulario({ ...formulario, [campo]: e.target.value })
+            setFormulario({
+              ...formulario,
+              [campo]: e.target.value,
+            })
           }
-          required={campo !== "descricao" && campo !== "imagem_url"}
+          required={
+            campo !== "descricao" &&
+            campo !== "imagem_url"
+          }
         />
       </label>
     );
   }
+
+  // ==========================================================
+  // INTERFACE DO SISTEMA
+  // ==========================================================
 
   return (
     <main className="app">
@@ -882,11 +1024,18 @@ function AppConteudo() {
             <h1>DEPÓSITO BRASIL</h1>
             <p>Materiais de Construção</p>
           </div>
-          <span className="status-online">Sistema online</span>
+
+          <span className="status-online">
+            Sistema online
+          </span>
         </header>
 
         <div className="conteudo">
-          {mensagem && <div className="mensagem">{mensagem}</div>}
+          {mensagem && (
+            <div className="mensagem">{mensagem}</div>
+          )}
+
+          {/* REQUISITO: TELA DE LOGIN */}
 
           {tela === "login" && (
             <form onSubmit={fazerLogin}>
@@ -930,6 +1079,8 @@ function AppConteudo() {
               </p>
             </form>
           )}
+
+          {/* REQUISITO: CADASTRO DE USUÁRIO */}
 
           {tela === "cadastro" && (
             <form onSubmit={fazerCadastro}>
@@ -997,18 +1148,27 @@ function AppConteudo() {
             </form>
           )}
 
+          {/* REQUISITO: DASHBOARD E MÓDULOS DO SISTEMA */}
+
           {tela === "dashboard" && (
             <div className="dashboard">
               <div className="dashboard-topo">
                 <div>
                   <h2>Dashboard</h2>
-                  <p>Bem-vindo(a), {usuario?.nome || "usuário"}!</p>
+                  <p>
+                    Bem-vindo(a), {usuario?.nome || "usuário"}!
+                  </p>
                 </div>
 
-                <button className="botao-sair" onClick={sair}>
+                <button
+                  className="botao-sair"
+                  onClick={sair}
+                >
                   Sair
                 </button>
               </div>
+
+              {/* RESUMO DO DASHBOARD */}
 
               <div className="resumo">
                 <div className="resumo-card">
@@ -1021,6 +1181,8 @@ function AppConteudo() {
                   <p>Materiais de construção</p>
                 </div>
               </div>
+
+              {/* NAVEGAÇÃO DOS QUATRO CRUDs E PERFIL */}
 
               <nav className="menu-crud">
                 {(
@@ -1035,7 +1197,9 @@ function AppConteudo() {
                   <button
                     key={item}
                     type="button"
-                    className={modulo === item ? "menu-ativo" : ""}
+                    className={
+                      modulo === item ? "menu-ativo" : ""
+                    }
                     onClick={() => abrirModulo(item)}
                   >
                     {titulos[item]}
@@ -1051,17 +1215,24 @@ function AppConteudo() {
                     <button
                       className="botao-atualizar"
                       type="button"
-                      onClick={() => void carregarModulo(modulo)}
+                      onClick={() =>
+                        void carregarModulo(modulo)
+                      }
                     >
                       Atualizar
                     </button>
 
-                    <button type="button" onClick={abrirNovoRegistro}>
+                    <button
+                      type="button"
+                      onClick={abrirNovoRegistro}
+                    >
                       Novo cadastro
                     </button>
                   </>
                 )}
               </div>
+
+              {/* REQUISITO: EDIÇÃO DO PRÓPRIO PERFIL */}
 
               {modulo === "perfil" && (
                 <form onSubmit={salvarPerfil}>
@@ -1071,12 +1242,17 @@ function AppConteudo() {
                   <input
                     value={perfil.nome || ""}
                     onChange={(e) =>
-                      setPerfil({ ...perfil, nome: e.target.value })
+                      setPerfil({
+                        ...perfil,
+                        nome: e.target.value,
+                      })
                     }
                     required
                   />
 
-                  <label>E-mail (não pode ser alterado)</label>
+                  <label>
+                    E-mail (não pode ser alterado)
+                  </label>
                   <input
                     type="email"
                     value={perfil.email || ""}
@@ -1087,7 +1263,10 @@ function AppConteudo() {
                   <input
                     value={perfil.cpf || ""}
                     onChange={(e) =>
-                      setPerfil({ ...perfil, cpf: e.target.value })
+                      setPerfil({
+                        ...perfil,
+                        cpf: e.target.value,
+                      })
                     }
                     maxLength={14}
                     placeholder="000.000.000-00"
@@ -1098,15 +1277,18 @@ function AppConteudo() {
                   <input
                     value={perfil.usuario || ""}
                     onChange={(e) =>
-                      setPerfil({ ...perfil, usuario: e.target.value })
+                      setPerfil({
+                        ...perfil,
+                        usuario: e.target.value,
+                      })
                     }
                   />
 
                   <h3>Alterar senha</h3>
 
                   <p>
-                    Se não quiser alterar sua senha, deixe os três campos
-                    abaixo vazios.
+                    Se não quiser alterar sua senha, deixe os
+                    três campos abaixo vazios.
                   </p>
 
                   <label>Senha atual</label>
@@ -1115,7 +1297,9 @@ function AppConteudo() {
                     name="senha-atual-perfil"
                     autoComplete="current-password"
                     value={senhaAtual}
-                    onChange={(e) => setSenhaAtual(e.target.value)}
+                    onChange={(e) =>
+                      setSenhaAtual(e.target.value)
+                    }
                     placeholder="Digite sua senha atual"
                   />
 
@@ -1125,7 +1309,9 @@ function AppConteudo() {
                     name="nova-senha-perfil"
                     autoComplete="new-password"
                     value={novaSenha}
-                    onChange={(e) => setNovaSenha(e.target.value)}
+                    onChange={(e) =>
+                      setNovaSenha(e.target.value)
+                    }
                     placeholder="Digite sua nova senha"
                   />
 
@@ -1142,250 +1328,304 @@ function AppConteudo() {
                   />
 
                   <p>
-                    A senha deve ter no mínimo 8 caracteres, incluindo
-                    maiúscula, minúscula, número e caractere especial.
+                    A senha deve ter no mínimo 8 caracteres,
+                    incluindo maiúscula, minúscula, número e
+                    caractere especial.
                   </p>
 
-                  <button type="submit" disabled={carregando}>
-                    {carregando ? "Salvando..." : "Salvar perfil"}
-                  </button>
-                </form>
-              )}
-
-              {modulo !== "perfil" && mostrarFormulario && (
-                <form onSubmit={salvarRegistro}>
-                  <h3>
-                    {editandoId ? "Editar registro" : "Novo cadastro"}
-                  </h3>
-
-                  {Object.keys(formularios[modulo]).map((campo) =>
-                    campoFormulario(campo)
-                  )}
-
-                  <button type="submit" disabled={carregando}>
+                  <button
+                    type="submit"
+                    disabled={carregando}
+                  >
                     {carregando
                       ? "Salvando..."
-                      : editandoId
-                        ? "Salvar alterações"
-                        : "Cadastrar"}
-                  </button>
-
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setMostrarFormulario(false);
-                      setEditandoId(null);
-                      setFormulario({});
-                    }}
-                  >
-                    Cancelar
+                      : "Salvar perfil"}
                   </button>
                 </form>
               )}
 
-              {modulo === "produtos" && !mostrarFormulario && (
+              {/* REQUISITO: FORMULÁRIOS DOS QUATRO CRUDs */}
+
+              {modulo !== "perfil" && (
                 <>
-                  <input
-                    className="campo-busca"
-                    value={busca}
-                    onChange={(e) => {
-                      setBusca(e.target.value);
-                      setPaginaAtual(1);
-                    }}
-                    placeholder="Buscar produto..."
-                  />
+                  {mostrarFormulario && (
+                    <form
+                      onSubmit={salvarRegistro}
+                      className="formulario-crud"
+                    >
+                      <h3>
+                        {editandoId
+                          ? `Editar ${titulos[modulo]}`
+                          : `Cadastrar ${titulos[modulo]}`}
+                      </h3>
 
-                  <div className="grade-produtos">
-                    {produtosFiltrados.map((produto) => (
-                      <article className="produto-card" key={produto.id}>
-                        <img
-                          className="produto-imagem"
-                          src={
-                            produto.imagem_url?.startsWith("http")
-                              ? produto.imagem_url
-                              : `${API_URL}/${(produto.imagem_url || "").replace(/^\/+/, "")}`
-                          }
-                          alt={produto.nome}
-                          onError={(e) => {
-                            e.currentTarget.style.display = "none";
+                      {Object.keys(formularios[modulo]).map(
+                        (campo) => campoFormulario(campo)
+                      )}
+
+                      <div className="acoes-formulario">
+                        <button
+                          type="submit"
+                          disabled={carregando}
+                        >
+                          {carregando
+                            ? "Salvando..."
+                            : editandoId
+                              ? "Atualizar"
+                              : "Cadastrar"}
+                        </button>
+
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setMostrarFormulario(false);
+                            setEditandoId(null);
+                            setFormulario({});
                           }}
-                        />
+                        >
+                          Cancelar
+                        </button>
+                      </div>
+                    </form>
+                  )}
 
-                        <div className="produto-info">
-                          <span className="produto-categoria">
-                            {produto.categoria}
-                          </span>
+                  {/* REQUISITO: PESQUISA DOS REGISTROS */}
 
-                          <h3>{produto.nome}</h3>
-
-                          <p className="produto-descricao">
-                            {produto.descricao}
-                          </p>
-
-                          <div className="produto-dados">
-                            <strong>
-                              R$ {Number(produto.preco).toFixed(2)}
-                            </strong>
-                            <span>Estoque: {produto.estoque}</span>
-                          </div>
-
-                          <div className="acoes-registro">
-                            <button
-                              type="button"
-                              onClick={() => editarRegistro(produto)}
-                            >
-                              Editar
-                            </button>
-
-                            <button
-                              type="button"
-                              onClick={() => excluirRegistro(produto.id)}
-                            >
-                              Excluir
-                            </button>
-                          </div>
-                        </div>
-                      </article>
-                    ))}
-
-                    {produtosFiltrados.length === 0 && (
-                      <p className="estado-lista">
-                        Nenhum produto encontrado.
-                      </p>
-                    )}
-                  </div>
-
-                  {/* PAGINAÇÃO DOS CARTÕES DE PRODUTOS */}
-                  <div className="paginacao">
-                    <button
-                      type="button"
-                      disabled={paginaAtual <= 1 || carregando}
-                      onClick={() =>
-                        setPaginaAtual((pagina) => Math.max(1, pagina - 1))
-                      }
-                    >
-                      Anterior
-                    </button>
-
-                    <span>
-                      Página {paginaAtual} de {totalPaginas}
-                    </span>
-
-                    <button
-                      type="button"
-                      disabled={paginaAtual >= totalPaginas || carregando}
-                      onClick={() =>
-                        setPaginaAtual((pagina) =>
-                          Math.min(totalPaginas, pagina + 1)
-                        )
-                      }
-                    >
-                      Próxima
-                    </button>
-                  </div>
-                </>
-              )}
-
-              {modulo !== "produtos" &&
-                modulo !== "perfil" &&
-                !mostrarFormulario && (
-                  <>
+                  <div className="pesquisa">
                     <input
-                      className="campo-busca"
+                      type="search"
+                      placeholder={`Pesquisar ${titulos[
+                        modulo
+                      ].toLowerCase()}...`}
                       value={busca}
                       onChange={(e) => {
                         setBusca(e.target.value);
                         setPaginaAtual(1);
                       }}
-                      placeholder={`Buscar ${titulos[modulo].toLowerCase()}...`}
                     />
+                  </div>
 
-                    <div className="tabela-responsiva">
-                      <table className="tabela-crud">
-                        <thead>
-                          <tr>
-                            <th>ID</th>
+                  {carregando && (
+                    <p className="carregando">
+                      Carregando registros...
+                    </p>
+                  )}
 
-                            {Object.keys(formularios[modulo]).map((campo) => (
-                              <th key={campo}>
-                                {modulo === "vendas" && campo === "produto_id"
-                                  ? "Produto"
-                                  : campo === "data_venda"
-                                    ? "Data da venda"
-                                    : campo.replace("_", " ")}
-                              </th>
-                            ))}
+                  {/* REQUISITO: CRUD DE PRODUTOS */}
 
-                            <th>Ações</th>
-                          </tr>
-                        </thead>
+                  {!carregando && modulo === "produtos" && (
+                    <div className="lista-produtos">
+                      {produtosFiltrados.length === 0 ? (
+                        <p className="estado-lista">
+                          Nenhum produto encontrado.
+                        </p>
+                      ) : (
+                        produtosFiltrados.map((produto) => (
+                          <article
+                            className="produto-card"
+                            key={produto.id}
+                          >
+                            {/* IMAGEM COM ALTURA LIMITADA */}
 
-                        <tbody>
-                          {registrosFiltrados.map((registro) => (
-                            <tr key={registro.id}>
-                              <td>{registro.id}</td>
+                            {produto.imagem_url && (
+                              <div className="produto-imagem">
+                              <img
+  className="produto-imagem"
+  src={
+    produto.imagem_url.startsWith("http")
+      ? produto.imagem_url
+      : `${API_URL}/${produto.imagem_url.replace(/^\/+/, "")}`
+  }
+  alt={produto.nome}
+  onError={(e) => {
+    e.currentTarget.style.display = "none";
+  }}
+/>
+                              </div>
+                            )}
 
-                              {Object.keys(formularios[modulo]).map((campo) => (
-                                <td key={campo}>
-                                  {campo === "preco" || campo === "salario" ? (
-                                    `R$ ${Number(registro[campo] || 0).toFixed(2)}`
-                                  ) : campo === "produto_id" ? (
-                                    registro.produto ||
-                                    registro.produto_nome ||
-                                    registro.produto_id ||
-                                    "-"
-                                  ) : campo === "data_venda" ? (
-                                    formatarData(
-                                      registro.data_venda ||
-                                        String(registro[campo] || "")
+                            <div className="produto-info">
+                              <h3>{produto.nome}</h3>
+
+                              <p className="produto-categoria">
+                                {produto.categoria}
+                              </p>
+
+                              <p className="produto-descricao">
+                                {produto.descricao}
+                              </p>
+
+                              <div className="produto-dados">
+                                <strong>
+                                  {Number(
+                                    produto.preco
+                                  ).toLocaleString("pt-BR", {
+                                    style: "currency",
+                                    currency: "BRL",
+                                  })}
+                                </strong>
+
+                                <span>
+                                  Estoque: {produto.estoque}
+                                </span>
+                              </div>
+
+                              {/* EDITAR E EXCLUIR PRODUTO */}
+
+                              <div className="produto-acoes">
+                                <button
+                                  type="button"
+                                  onClick={() =>
+                                    editarRegistro(produto)
+                                  }
+                                >
+                                  Editar
+                                </button>
+
+                                <button
+                                  type="button"
+                                  onClick={() =>
+                                    void excluirRegistro(
+                                      produto.id
                                     )
-                                  ) : (
-                                    registro[campo] ?? "-"
-                                  )}
-                                </td>
+                                  }
+                                >
+                                  Excluir
+                                </button>
+                              </div>
+                            </div>
+                          </article>
+                        ))
+                      )}
+                    </div>
+                  )}
+
+                  {/* REQUISITO: CRUD DE CLIENTES,
+                      FUNCIONÁRIOS E VENDAS */}
+
+                  {!carregando && modulo !== "produtos" && (
+                    <div className="tabela-container">
+                      {registrosFiltrados.length === 0 ? (
+                        <p className="estado-lista">
+                          Nenhum registro encontrado.
+                        </p>
+                      ) : (
+                        <table>
+                          <thead>
+                            <tr>
+                              <th>ID</th>
+
+                              {Object.keys(
+                                formularios[modulo]
+                              ).map((campo) => (
+                                <th key={campo}>
+                                  {campo === "produto_id"
+                                    ? "Produto"
+                                    : campo === "produto_nome"
+                                      ? "Produto"
+                                      : campo === "data_venda"
+                                        ? "Data da venda"
+                                        : campo
+                                            .charAt(0)
+                                            .toUpperCase() +
+                                          campo.slice(1)}
+                                </th>
                               ))}
 
-                              <td>
-                                <div className="acoes-registro">
-                                  <button
-                                    type="button"
-                                    onClick={() => editarRegistro(registro)}
-                                  >
-                                    Editar
-                                  </button>
-
-                                  <button
-                                    type="button"
-                                    onClick={() => excluirRegistro(registro.id)}
-                                  >
-                                    Excluir
-                                  </button>
-                                </div>
-                              </td>
+                              <th>Ações</th>
                             </tr>
-                          ))}
+                          </thead>
 
-                          {registrosFiltrados.length === 0 && (
-                            <tr>
-                              <td
-                                colSpan={
-                                  Object.keys(formularios[modulo]).length + 2
-                                }
-                              >
-                                Nenhum registro encontrado.
-                              </td>
-                            </tr>
-                          )}
-                        </tbody>
-                      </table>
+                          <tbody>
+                            {registrosFiltrados.map(
+                              (registro) => (
+                                <tr key={registro.id}>
+                                  <td>{registro.id}</td>
+
+                                  {Object.keys(
+                                    formularios[modulo]
+                                  ).map((campo) => {
+                                    let valor = registro[campo];
+
+                                    if (
+                                      campo === "produto_id" &&
+                                      registro.produto_nome
+                                    ) {
+                                      valor =
+                                        registro.produto_nome;
+                                    }
+
+                                    if (
+                                      campo === "data_venda" &&
+                                      typeof valor === "string"
+                                    ) {
+                                      valor = formatarData(valor);
+                                    }
+
+                                    if (
+                                      campo === "preco" ||
+                                      campo === "salario"
+                                    ) {
+                                      valor = Number(
+                                        valor || 0
+                                      ).toLocaleString("pt-BR", {
+                                        style: "currency",
+                                        currency: "BRL",
+                                      });
+                                    }
+
+                                    return (
+                                      <td key={campo}>
+                                        {String(valor ?? "-")}
+                                      </td>
+                                    );
+                                  })}
+
+                                  {/* AÇÕES DE EDIÇÃO E EXCLUSÃO */}
+
+                                  <td>
+                                    <div className="acoes-registro">
+                                      <button
+                                        type="button"
+                                        onClick={() =>
+                                          editarRegistro(registro)
+                                        }
+                                      >
+                                        Editar
+                                      </button>
+
+                                      <button
+                                        type="button"
+                                        onClick={() =>
+                                          void excluirRegistro(
+                                            registro.id
+                                          )
+                                        }
+                                      >
+                                        Excluir
+                                      </button>
+                                    </div>
+                                  </td>
+                                </tr>
+                              )
+                            )}
+                          </tbody>
+                        </table>
+                      )}
                     </div>
+                  )}
 
+                  {/* REQUISITO: PAGINAÇÃO */}
+
+                  {!carregando && totalPaginas > 1 && (
                     <div className="paginacao">
                       <button
                         type="button"
-                        disabled={paginaAtual <= 1 || carregando}
+                        disabled={paginaAtual <= 1}
                         onClick={() =>
-                          setPaginaAtual((pagina) => Math.max(1, pagina - 1))
+                          setPaginaAtual((pagina) =>
+                            Math.max(1, pagina - 1)
+                          )
                         }
                       >
                         Anterior
@@ -1397,18 +1637,24 @@ function AppConteudo() {
 
                       <button
                         type="button"
-                        disabled={paginaAtual >= totalPaginas || carregando}
+                        disabled={
+                          paginaAtual >= totalPaginas
+                        }
                         onClick={() =>
                           setPaginaAtual((pagina) =>
-                            Math.min(totalPaginas, pagina + 1)
+                            Math.min(
+                              totalPaginas,
+                              pagina + 1
+                            )
                           )
                         }
                       >
                         Próxima
                       </button>
                     </div>
-                  </>
-                )}
+                  )}
+                </>
+              )}
             </div>
           )}
         </div>
@@ -1416,6 +1662,12 @@ function AppConteudo() {
     </main>
   );
 }
+
+// ============================================================
+// COMPONENTE PRINCIPAL
+// O AuthProvider disponibiliza os dados de autenticação
+// para todo o conteúdo do sistema.
+// ============================================================
 
 function App() {
   return (

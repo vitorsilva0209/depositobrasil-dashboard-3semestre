@@ -1,3 +1,8 @@
+
+/* =========================================
+   CONFIGURAÇÕES GERAIS
+========================================= */
+
 * {
   margin: 0;
   padding: 0;
@@ -14,7 +19,8 @@ body {
 
 button,
 input,
-textarea {
+textarea,
+select {
   font: inherit;
 }
 
@@ -22,6 +28,15 @@ button {
   cursor: pointer;
   border: none;
 }
+
+button:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+/* =========================================
+   ESTRUTURA PRINCIPAL
+========================================= */
 
 .app {
   min-height: 100vh;
@@ -41,6 +56,14 @@ button {
   border-radius: 18px;
   box-shadow: 0 15px 45px rgba(0, 0, 0, 0.35);
 }
+
+.conteudo {
+  padding: 35px;
+}
+
+/* =========================================
+   CABEÇALHO
+========================================= */
 
 .cabecalho {
   display: flex;
@@ -74,9 +97,9 @@ button {
   font-weight: bold;
 }
 
-.conteudo {
-  padding: 35px;
-}
+/* =========================================
+   MENSAGENS
+========================================= */
 
 .mensagem {
   margin-bottom: 22px;
@@ -86,6 +109,16 @@ button {
   border-left: 4px solid #c62828;
   border-radius: 6px;
 }
+
+.carregando {
+  margin-top: 20px;
+  color: #cccccc;
+  text-align: center;
+}
+
+/* =========================================
+   FORMULÁRIOS
+========================================= */
 
 form {
   width: 100%;
@@ -106,7 +139,8 @@ label {
 }
 
 input,
-textarea {
+textarea,
+select {
   width: 100%;
   padding: 13px 14px;
   color: #ffffff;
@@ -117,9 +151,15 @@ textarea {
 }
 
 input:focus,
-textarea:focus {
+textarea:focus,
+select:focus {
   border-color: #c62828;
   box-shadow: 0 0 0 2px rgba(198, 40, 40, 0.15);
+}
+
+input:disabled {
+  opacity: 0.65;
+  cursor: not-allowed;
 }
 
 textarea {
@@ -145,11 +185,6 @@ form > button:hover,
   background: #e53935;
 }
 
-button:disabled {
-  opacity: 0.6;
-  cursor: not-allowed;
-}
-
 form p {
   margin-top: 20px;
   color: #cccccc;
@@ -166,6 +201,10 @@ form p button {
 form p button:hover {
   background: #c62828;
 }
+
+/* =========================================
+   DASHBOARD
+========================================= */
 
 .dashboard {
   width: 100%;
@@ -202,6 +241,10 @@ form p button:hover {
   background: #e53935;
 }
 
+/* =========================================
+   CARDS DE RESUMO
+========================================= */
+
 .resumo {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -227,6 +270,37 @@ form p button:hover {
   color: #bbbbbb;
 }
 
+/* =========================================
+   MENU DOS MÓDULOS
+========================================= */
+
+.menu-crud {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin: 25px 0;
+}
+
+.menu-crud button {
+  padding: 12px 20px;
+  border: 1px solid #c62828;
+  border-radius: 8px;
+  background: #333333;
+  color: #ffffff;
+  font-weight: 600;
+  transition: 0.2s;
+}
+
+.menu-crud button:hover,
+.menu-crud button.menu-ativo {
+  background: #c62828;
+  color: #ffffff;
+}
+
+/* =========================================
+   TÍTULO DOS MÓDULOS
+========================================= */
+
 .produtos-topo {
   display: flex;
   align-items: center;
@@ -243,17 +317,38 @@ form p button:hover {
   margin-top: 0;
 }
 
-.campo-busca {
+/* =========================================
+   PESQUISA
+========================================= */
+
+.pesquisa {
+  width: 100%;
   margin-bottom: 25px;
 }
 
-.grade-produtos {
+.pesquisa input {
+  width: 100%;
+  padding: 15px;
+}
+
+/* =========================================
+   LISTAGEM DOS PRODUTOS
+========================================= */
+
+.lista-produtos {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 20px;
+  width: 100%;
+  align-items: stretch;
 }
 
+/* =========================================
+   CARD DO PRODUTO
+========================================= */
+
 .produto-card {
+  min-width: 0;
   overflow: hidden;
   background: #303030;
   border: 1px solid #454545;
@@ -266,19 +361,31 @@ form p button:hover {
   border-color: #c62828;
 }
 
+/* =========================================
+   IMAGEM DO PRODUTO
+   Altura limitada para evitar imagens grandes.
+========================================= */
+
 .produto-imagem {
   display: block;
   width: 100%;
-  height: 190px;
-  object-fit: cover;
-  background: #eeeeee;
+  height: 180px;
+  max-height: 180px;
+  padding: 10px;
+  object-fit: contain;
+  background: #ffffff;
 }
+
+/* =========================================
+   INFORMAÇÕES DO PRODUTO
+========================================= */
 
 .produto-info {
   padding: 18px;
 }
 
 .produto-categoria {
+  margin-bottom: 10px;
   color: #ef5350;
   font-size: 12px;
   font-weight: bold;
@@ -302,6 +409,7 @@ form p button:hover {
   display: flex;
   justify-content: space-between;
   align-items: center;
+  flex-wrap: wrap;
   gap: 10px;
   margin-top: 18px;
   padding-top: 15px;
@@ -318,6 +426,151 @@ form p button:hover {
   font-size: 13px;
 }
 
+/* =========================================
+   AÇÕES DOS PRODUTOS
+========================================= */
+
+.produto-acoes {
+  display: flex;
+  gap: 10px;
+  padding: 0 18px 18px;
+}
+
+.produto-acoes button {
+  flex: 1;
+  padding: 10px;
+  color: #ffffff;
+  background: #555555;
+  border-radius: 6px;
+  font-weight: bold;
+}
+
+.produto-acoes button:first-child {
+  background: #c62828;
+}
+
+.produto-acoes button:last-child {
+  background: #444444;
+}
+
+.produto-acoes button:hover {
+  opacity: 0.8;
+}
+
+/* =========================================
+   FORMULÁRIO CRUD
+========================================= */
+
+.formulario-crud {
+  margin-bottom: 30px;
+  padding: 22px;
+  background: #303030;
+  border: 1px solid #444444;
+  border-radius: 10px;
+}
+
+.acoes-formulario {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: 20px;
+}
+
+.acoes-formulario button {
+  margin-top: 0;
+}
+
+/* =========================================
+   TABELAS
+========================================= */
+
+.tabela-container {
+  width: 100%;
+  overflow-x: auto;
+  margin-top: 20px;
+  border-radius: 8px;
+}
+
+.tabela-container table {
+  width: 100%;
+  border-collapse: collapse;
+  color: #ffffff;
+  background: #2d2d2d;
+}
+
+.tabela-container th,
+.tabela-container td {
+  padding: 12px;
+  border: 1px solid #444444;
+  text-align: left;
+}
+
+.tabela-container th {
+  background: #171717;
+  color: #ffffff;
+}
+
+.tabela-container tr:hover {
+  background: #383838;
+}
+
+/* =========================================
+   AÇÕES DOS REGISTROS
+========================================= */
+
+.acoes-registro {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.acoes-registro button {
+  padding: 8px 14px;
+  border: none;
+  border-radius: 6px;
+  background: #c62828;
+  color: #ffffff;
+  cursor: pointer;
+}
+
+.acoes-registro button:hover {
+  background: #a51e1e;
+}
+
+/* =========================================
+   PAGINAÇÃO
+========================================= */
+
+.paginacao {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 15px;
+  margin-top: 25px;
+}
+
+.paginacao button {
+  padding: 10px 16px;
+  color: #ffffff;
+  background: #c62828;
+  border-radius: 6px;
+  font-weight: bold;
+}
+
+.paginacao button:hover:not(:disabled) {
+  background: #e53935;
+}
+
+.paginacao span {
+  color: #ffffff;
+}
+
+/* =========================================
+   LISTA VAZIA
+========================================= */
+
 .estado-lista {
   grid-column: 1 / -1;
   padding: 25px;
@@ -327,8 +580,24 @@ form p button:hover {
   border-radius: 8px;
 }
 
-@media (max-width: 800px) {
-  .grade-produtos {
+/* =========================================
+   ESPAÇAMENTO DOS BOTÕES
+========================================= */
+
+.conteudo form button + button {
+  margin-left: 10px;
+}
+
+.conteudo form button {
+  margin-top: 8px;
+}
+
+/* =========================================
+   RESPONSIVIDADE
+========================================= */
+
+@media (max-width: 900px) {
+  .lista-produtos {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }
@@ -356,8 +625,12 @@ form p button:hover {
     grid-template-columns: 1fr;
   }
 
-  .grade-produtos {
+  .lista-produtos {
     grid-template-columns: 1fr;
+  }
+
+  .produto-imagem {
+    height: 180px;
   }
 
   .dashboard-topo {
@@ -371,109 +644,12 @@ form p button:hover {
   .produtos-topo h2 {
     width: 100%;
   }
-}
-.produto-acoes {
-  display: flex;
-  gap: 10px;
-  padding: 0 18px 18px;
-}
 
-.produto-acoes button {
-  flex: 1;
-  padding: 10px;
-  color: white;
-  background: #555;
-  border-radius: 6px;
-  font-weight: bold;
-}
+  .produtos-topo button {
+    flex: 1;
+  }
 
-.produto-acoes button:first-child {
-  background: #c62828;
-}
-
-.produto-acoes button:last-child {
-  background: #444;
-}
-
-.produto-acoes button:hover {
-  opacity: 0.8;
-}
-.menu-crud {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 10px;
-  margin: 25px 0;
-}
-
-.menu-crud button {
-  padding: 12px 20px;
-  border: 1px solid #c62828;
-  border-radius: 8px;
-  background: #333;
-  color: #fff;
-  font-weight: 600;
-  cursor: pointer;
-  transition: 0.2s;
-}
-
-.menu-crud button:hover,
-.menu-crud button.menu-ativo {
-  background: #c62828;
-  color: #fff;
-}
-
-.acoes-registro {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-  margin-top: 12px;
-}
-
-.acoes-registro button {
-  padding: 8px 14px;
-  border: none;
-  border-radius: 6px;
-  background: #c62828;
-  color: #fff;
-  cursor: pointer;
-}
-
-.acoes-registro button:hover {
-  background: #a51e1e;
-}
-
-.tabela-responsiva {
-  width: 100%;
-  overflow-x: auto;
-  margin-top: 20px;
-}
-
-.tabela-crud {
-  width: 100%;
-  border-collapse: collapse;
-  color: #fff;
-  background: #2d2d2d;
-}
-
-.tabela-crud th,
-.tabela-crud td {
-  padding: 12px;
-  border: 1px solid #444;
-  text-align: left;
-}
-
-.tabela-crud th {
-  background: #171717;
-  color: #fff;
-}
-
-.tabela-crud tr:hover {
-  background: #383838;
-}
-.conteudo form button + button {
-  margin-left: 10px;
-}
-
-.conteudo form button {
-  margin-top: 8px;
+  .paginacao {
+    gap: 8px;
+  }
 }
