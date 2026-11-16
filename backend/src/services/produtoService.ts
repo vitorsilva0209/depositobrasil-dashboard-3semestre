@@ -1,6 +1,12 @@
 
 import { Produto } from "../models/produtosModel";
-import { ProdutoRepository } from "../repositories/ProdutoRepository";
+import { IRepository } from "../interfaces/IRepository";
+import { ProdutoListagem } from "../interfaces/ProdutoListagem";
+import {
+  IPaginacaoRepository,
+  ParametrosPaginacao,
+  ResultadoPaginado,
+} from "../interfaces/Paginacao";
 import {
   RecursoNaoEncontradoError,
   ErroValidacao,
@@ -8,11 +14,19 @@ import {
 
 export class ProdutoService {
   constructor(
-    private readonly produtoRepository: ProdutoRepository
+    private readonly produtoRepository:
+      IRepository<Produto> &
+      IPaginacaoRepository<ProdutoListagem>
   ) {}
 
   async listar(): Promise<Produto[]> {
     return this.produtoRepository.listar();
+  }
+
+  async listarPaginado(
+    parametros: ParametrosPaginacao
+  ): Promise<ResultadoPaginado<ProdutoListagem>> {
+    return this.produtoRepository.listarPaginado(parametros);
   }
 
   async buscarPorId(id: number): Promise<Produto> {
@@ -29,7 +43,6 @@ export class ProdutoService {
 
   async cadastrar(dados: Produto): Promise<number> {
     dados.validar();
-
     return this.produtoRepository.criar(dados);
   }
 
@@ -37,10 +50,8 @@ export class ProdutoService {
     this.validarId(id);
     dados.validar();
 
-    const atualizado = await this.produtoRepository.atualizar(
-      id,
-      dados
-    );
+    const atualizado =
+      await this.produtoRepository.atualizar(id, dados);
 
     if (!atualizado) {
       throw new RecursoNaoEncontradoError("Produto");

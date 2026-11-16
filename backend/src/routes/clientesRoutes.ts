@@ -1,9 +1,6 @@
 
 import { Router } from "express";
-import { database } from "../config/database";
 import { autenticarToken } from "../middlewares/authMiddleware";
-import { RowDataPacket } from "mysql2";
-
 import { Cliente } from "../models/clienteModel";
 import { ClienteRepository } from "../repositories/ClienteRepository";
 import { ClienteService } from "../services/clienteService";
@@ -19,49 +16,22 @@ router.use(autenticarToken);
 router.get("/", async (req, res, next) => {
   try {
     const pagina = Math.max(1, Number(req.query.pagina) || 1);
-    const limite = Math.min(
-      100,
-      Math.max(1, Number(req.query.limite) || 10)
-    );
-
-    const offset = (pagina - 1) * limite;
+    const limite = Math.min(100, Math.max(1, Number(req.query.limite) || 10));
     const busca = String(req.query.busca || "").trim();
 
-    const [clientes] = await database.execute<RowDataPacket[]>(
-      `SELECT id, nome, email, telefone
-       FROM clientes
-       WHERE nome LIKE ? OR email LIKE ? OR telefone LIKE ?
-       ORDER BY id DESC
-       LIMIT ? OFFSET ?`,
-      [
-        `%${busca}%`,
-        `%${busca}%`,
-        `%${busca}%`,
-        limite,
-        offset,
-      ]
-    );
-
-    const [total] = await database.execute<RowDataPacket[]>(
-      `SELECT COUNT(*) AS total
-       FROM clientes
-       WHERE nome LIKE ? OR email LIKE ? OR telefone LIKE ?`,
-      [
-        `%${busca}%`,
-        `%${busca}%`,
-        `%${busca}%`,
-      ]
-    );
-
-    const totalRegistros = Number(total[0].total);
+    const resultado = await clienteService.listarPaginado({
+      pagina,
+      limite,
+      busca,
+    });
 
     return res.json({
       sucesso: true,
-      clientes,
+      clientes: resultado.dados,
       pagina,
       limite,
-      total: totalRegistros,
-      totalPaginas: Math.ceil(totalRegistros / limite),
+      total: resultado.total,
+      totalPaginas: Math.ceil(resultado.total / limite),
     });
   } catch (erro) {
     return next(erro);
@@ -72,7 +42,6 @@ router.get("/", async (req, res, next) => {
 router.get("/:id", async (req, res, next) => {
   try {
     const id = Number(req.params.id);
-
     const cliente = await clienteService.buscarPorId(id);
 
     return res.json({
@@ -89,12 +58,7 @@ router.post("/", async (req, res, next) => {
   try {
     const { nome, email, telefone } = req.body;
 
-    const cliente = new Cliente(
-      nome,
-      email ?? "",
-      telefone ?? ""
-    );
-
+    const cliente = new Cliente(nome, email ?? "", telefone ?? "");
     const id = await clienteService.cadastrar(cliente);
 
     return res.status(201).json({
@@ -113,12 +77,7 @@ router.put("/:id", async (req, res, next) => {
     const id = Number(req.params.id);
     const { nome, email, telefone } = req.body;
 
-    const cliente = new Cliente(
-      nome,
-      email ?? "",
-      telefone ?? ""
-    );
-
+    const cliente = new Cliente(nome, email ?? "", telefone ?? "");
     await clienteService.atualizar(id, cliente);
 
     return res.json({
@@ -134,7 +93,6 @@ router.put("/:id", async (req, res, next) => {
 router.delete("/:id", async (req, res, next) => {
   try {
     const id = Number(req.params.id);
-
     await clienteService.excluir(id);
 
     return res.json({

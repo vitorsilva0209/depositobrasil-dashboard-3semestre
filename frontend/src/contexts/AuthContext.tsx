@@ -1,3 +1,4 @@
+
 import {
   useCallback,
   useMemo,
@@ -14,34 +15,83 @@ type AuthProviderProps = {
   children: ReactNode;
 };
 
+type SessaoInicial = {
+  token: string;
+  usuario: Usuario | null;
+};
+
+/**
+ * Recupera a sessão armazenada no navegador.
+ * Se os dados estiverem ausentes ou inválidos,
+ * limpa o armazenamento e inicia sem autenticação.
+ */
+function recuperarSessao(): SessaoInicial {
+  const tokenSalvo = localStorage.getItem("token");
+  const usuarioSalvo = localStorage.getItem("usuario");
+
+  if (!tokenSalvo || !usuarioSalvo) {
+    localStorage.removeItem("token");
+    localStorage.removeItem("usuario");
+
+    return {
+      token: "",
+      usuario: null,
+    };
+  }
+
+  try {
+    const dadosUsuario: unknown = JSON.parse(usuarioSalvo);
+
+    if (
+      typeof dadosUsuario !== "object" ||
+      dadosUsuario === null ||
+      Array.isArray(dadosUsuario)
+    ) {
+      throw new Error("Dados de usuário inválidos.");
+    }
+
+    return {
+      token: tokenSalvo,
+      usuario: dadosUsuario as Usuario,
+    };
+  } catch {
+    localStorage.removeItem("token");
+    localStorage.removeItem("usuario");
+
+    return {
+      token: "",
+      usuario: null,
+    };
+  }
+}
+
 export function AuthProvider({ children }: AuthProviderProps) {
-  const [token, setToken] = useState<string>(
-    () => localStorage.getItem("token") || ""
+  const [sessaoInicial] = useState<SessaoInicial>(
+    recuperarSessao
   );
 
-  const [usuario, setUsuario] = useState<Usuario | null>(() => {
-    const usuarioSalvo = localStorage.getItem("usuario");
-    const tokenSalvo = localStorage.getItem("token");
+  const [token, setToken] = useState<string>(
+    sessaoInicial.token
+  );
 
-    if (!usuarioSalvo || !tokenSalvo) {
-      localStorage.removeItem("usuario");
-      localStorage.removeItem("token");
-      return null;
-    }
+  const [usuario, setUsuario] = useState<Usuario | null>(
+    sessaoInicial.usuario
+  );
 
-    try {
-      return JSON.parse(usuarioSalvo) as Usuario;
-    } catch {
-      localStorage.removeItem("usuario");
-      localStorage.removeItem("token");
-      return null;
-    }
-  });
-
+  /**
+   * Salva o token e os dados do usuário após o login.
+   */
   const entrar = useCallback(
     (novoToken: string, dadosUsuario: Usuario) => {
+      if (!novoToken.trim()) {
+        throw new Error("Token de autenticação inválido.");
+      }
+
       localStorage.setItem("token", novoToken);
-      localStorage.setItem("usuario", JSON.stringify(dadosUsuario));
+      localStorage.setItem(
+        "usuario",
+        JSON.stringify(dadosUsuario)
+      );
 
       setToken(novoToken);
       setUsuario(dadosUsuario);
@@ -49,15 +99,25 @@ export function AuthProvider({ children }: AuthProviderProps) {
     []
   );
 
+  /**
+   * Atualiza os dados do usuário no estado e no navegador.
+   */
   const atualizarUsuario = useCallback(
     (dadosUsuario: Partial<Usuario>) => {
       setUsuario((atual) => {
-        const atualizado = {
+        if (!atual) {
+          return null;
+        }
+
+        const atualizado: Usuario = {
           ...atual,
           ...dadosUsuario,
         };
 
-        localStorage.setItem("usuario", JSON.stringify(atualizado));
+        localStorage.setItem(
+          "usuario",
+          JSON.stringify(atualizado)
+        );
 
         return atualizado;
       });
@@ -65,6 +125,9 @@ export function AuthProvider({ children }: AuthProviderProps) {
     []
   );
 
+  /**
+   * Encerra a sessão e remove os dados armazenados.
+   */
   const sair = useCallback(() => {
     localStorage.removeItem("token");
     localStorage.removeItem("usuario");
@@ -73,16 +136,25 @@ export function AuthProvider({ children }: AuthProviderProps) {
     setUsuario(null);
   }, []);
 
+  const autenticado = Boolean(token && usuario);
+
   const valor = useMemo(
     () => ({
       usuario,
       token,
-      autenticado: Boolean(token && usuario),
+      autenticado,
       entrar,
       atualizarUsuario,
       sair,
     }),
-    [usuario, token, entrar, atualizarUsuario, sair]
+    [
+      usuario,
+      token,
+      autenticado,
+      entrar,
+      atualizarUsuario,
+      sair,
+    ]
   );
 
   return (

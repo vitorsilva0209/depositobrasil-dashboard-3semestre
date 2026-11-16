@@ -1,8 +1,5 @@
+import type { IReadRepository } from "./IReadRepository";
+import type { IWriteRepository } from "./IWriteRepository";
 
-export interface IRepository<T> {
-  buscarPorId(id: number): Promise<T | null>;
-  listar(): Promise<T[]>;
-  criar(dados: T): Promise<number>;
-  atualizar(id: number, dados: T): Promise<boolean>;
-  excluir(id: number): Promise<boolean>;
-}
+export interface IRepository<T>
+  extends IReadRepository<T>, IWriteRepository<T> {}

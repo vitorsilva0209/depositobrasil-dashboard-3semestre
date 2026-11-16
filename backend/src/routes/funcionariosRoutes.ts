@@ -1,9 +1,6 @@
 
 import { Router } from "express";
-import { database } from "../config/database";
 import { autenticarToken } from "../middlewares/authMiddleware";
-import { RowDataPacket } from "mysql2";
-
 import { Funcionario } from "../models/funcionarioModel";
 import { FuncionarioRepository } from "../repositories/FuncionarioRepository";
 import { FuncionarioService } from "../services/funcionarioService";
@@ -19,39 +16,22 @@ router.use(autenticarToken);
 router.get("/", async (req, res, next) => {
   try {
     const pagina = Math.max(1, Number(req.query.pagina) || 1);
-    const limite = Math.min(
-      100,
-      Math.max(1, Number(req.query.limite) || 10)
-    );
-
-    const offset = (pagina - 1) * limite;
+    const limite = Math.min(100, Math.max(1, Number(req.query.limite) || 10));
     const busca = String(req.query.busca || "").trim();
 
-    const [funcionarios] = await database.execute<RowDataPacket[]>(
-      `SELECT id, nome, cargo, salario
-       FROM funcionarios
-       WHERE nome LIKE ? OR cargo LIKE ?
-       ORDER BY id DESC
-       LIMIT ? OFFSET ?`,
-      [`%${busca}%`, `%${busca}%`, limite, offset]
-    );
-
-    const [total] = await database.execute<RowDataPacket[]>(
-      `SELECT COUNT(*) AS total
-       FROM funcionarios
-       WHERE nome LIKE ? OR cargo LIKE ?`,
-      [`%${busca}%`, `%${busca}%`]
-    );
-
-    const totalRegistros = Number(total[0].total);
+    const resultado = await funcionarioService.listarPaginado({
+      pagina,
+      limite,
+      busca,
+    });
 
     return res.json({
       sucesso: true,
-      funcionarios,
+      funcionarios: resultado.dados,
       pagina,
       limite,
-      total: totalRegistros,
-      totalPaginas: Math.ceil(totalRegistros / limite),
+      total: resultado.total,
+      totalPaginas: Math.ceil(resultado.total / limite),
     });
   } catch (erro) {
     return next(erro);
@@ -62,9 +42,7 @@ router.get("/", async (req, res, next) => {
 router.get("/:id", async (req, res, next) => {
   try {
     const id = Number(req.params.id);
-
-    const funcionario =
-      await funcionarioService.buscarPorId(id);
+    const funcionario = await funcionarioService.buscarPorId(id);
 
     return res.json({
       sucesso: true,
@@ -80,12 +58,7 @@ router.post("/", async (req, res, next) => {
   try {
     const { nome, cargo, salario } = req.body;
 
-    const funcionario = new Funcionario(
-      nome,
-      cargo,
-      Number(salario)
-    );
-
+    const funcionario = new Funcionario(nome, cargo, Number(salario));
     const id = await funcionarioService.cadastrar(funcionario);
 
     return res.status(201).json({
@@ -104,12 +77,7 @@ router.put("/:id", async (req, res, next) => {
     const id = Number(req.params.id);
     const { nome, cargo, salario } = req.body;
 
-    const funcionario = new Funcionario(
-      nome,
-      cargo,
-      Number(salario)
-    );
-
+    const funcionario = new Funcionario(nome, cargo, Number(salario));
     await funcionarioService.atualizar(id, funcionario);
 
     return res.json({
@@ -125,7 +93,6 @@ router.put("/:id", async (req, res, next) => {
 router.delete("/:id", async (req, res, next) => {
   try {
     const id = Number(req.params.id);
-
     await funcionarioService.excluir(id);
 
     return res.json({

@@ -2,16 +2,28 @@
 import { ResultSetHeader, RowDataPacket } from "mysql2";
 import { database } from "../config/database";
 import { Funcionario } from "../models/funcionarioModel";
-import { BaseRepository } from "./BaseRepository";
+import { IRepository } from "../interfaces/IRepository";
+import { FuncionarioListagem } from "../interfaces/FuncionarioListagem";
+import {
+  IPaginacaoRepository,
+  ParametrosPaginacao,
+  ResultadoPaginado,
+} from "../interfaces/Paginacao";
 
 interface FuncionarioRow extends RowDataPacket {
   id: number;
   nome: string;
   cargo: string;
-  salario: number | string;
+  salario: number;
 }
 
-export class FuncionarioRepository extends BaseRepository<Funcionario> {
+interface TotalRow extends RowDataPacket {
+  total: number;
+}
+
+export class FuncionarioRepository
+  implements IRepository<Funcionario>, IPaginacaoRepository<FuncionarioListagem>
+{
   private converterParaFuncionario(
     registro: FuncionarioRow
   ): Funcionario {
@@ -19,7 +31,7 @@ export class FuncionarioRepository extends BaseRepository<Funcionario> {
       registro.nome,
       registro.cargo,
       Number(registro.salario),
-      registro.id
+      Number(registro.id)
     );
   }
 
@@ -50,6 +62,54 @@ export class FuncionarioRepository extends BaseRepository<Funcionario> {
     );
   }
 
+  async listarPaginado(
+    parametros: ParametrosPaginacao
+  ): Promise<ResultadoPaginado<FuncionarioListagem>> {
+    const { pagina, limite, busca } = parametros;
+    const offset = (pagina - 1) * limite;
+    const termo = `%${busca}%`;
+
+    const condicao = `
+      CAST(id AS CHAR) LIKE ?
+      OR nome LIKE ?
+      OR cargo LIKE ?
+      OR CAST(salario AS CHAR) LIKE ?
+    `;
+
+    const parametrosBusca = [
+      termo,
+      termo,
+      termo,
+      termo,
+    ];
+
+    const [registros] = await database.execute<FuncionarioRow[]>(
+      `SELECT id, nome, cargo, salario
+       FROM funcionarios
+       WHERE ${condicao}
+       ORDER BY id DESC
+       LIMIT ? OFFSET ?`,
+      [...parametrosBusca, limite, offset]
+    );
+
+    const [total] = await database.execute<TotalRow[]>(
+      `SELECT COUNT(*) AS total
+       FROM funcionarios
+       WHERE ${condicao}`,
+      parametrosBusca
+    );
+
+    return {
+      dados: registros.map((registro) => ({
+        id: Number(registro.id),
+        nome: registro.nome,
+        cargo: registro.cargo,
+        salario: Number(registro.salario),
+      })),
+      total: Number(total[0]?.total ?? 0),
+    };
+  }
+
   async criar(dados: Funcionario): Promise<number> {
     dados.validar();
 
@@ -68,25 +128,19 @@ export class FuncionarioRepository extends BaseRepository<Funcionario> {
   ): Promise<boolean> {
     dados.validar();
 
-    const existente = await this.buscarPorId(id);
-
-    if (!existente) {
-      return false;
-    }
-
-    await database.execute<ResultSetHeader>(
+    const [resultado] = await database.execute<ResultSetHeader>(
       `UPDATE funcionarios
        SET nome = ?, cargo = ?, salario = ?
        WHERE id = ?`,
       [dados.nome, dados.cargo, dados.salario, id]
     );
 
-    return true;
+    return resultado.affectedRows > 0;
   }
 
   async excluir(id: number): Promise<boolean> {
     const [resultado] = await database.execute<ResultSetHeader>(
-      "DELETE FROM funcionarios WHERE id = ?",
+      `DELETE FROM funcionarios WHERE id = ?`,
       [id]
     );
 

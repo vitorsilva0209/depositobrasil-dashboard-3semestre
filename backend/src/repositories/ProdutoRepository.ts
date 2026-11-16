@@ -2,19 +2,31 @@
 import { ResultSetHeader, RowDataPacket } from "mysql2";
 import { database } from "../config/database";
 import { Produto } from "../models/produtosModel";
-import { BaseRepository } from "./BaseRepository";
+import { IRepository } from "../interfaces/IRepository";
+import { ProdutoListagem } from "../interfaces/ProdutoListagem";
+import {
+  IPaginacaoRepository,
+  ParametrosPaginacao,
+  ResultadoPaginado,
+} from "../interfaces/Paginacao";
 
 interface ProdutoRow extends RowDataPacket {
   id: number;
   nome: string;
   categoria: string;
   preco: number;
-  descricao: string | null;
-  imagem_url: string | null;
+  descricao: string;
+  imagem_url: string;
   estoque: number;
 }
 
-export class ProdutoRepository extends BaseRepository<Produto> {
+interface TotalRow extends RowDataPacket {
+  total: number;
+}
+
+export class ProdutoRepository
+  implements IRepository<Produto>, IPaginacaoRepository<ProdutoListagem>
+{
   private converterParaProduto(registro: ProdutoRow): Produto {
     return new Produto(
       registro.nome,
@@ -54,6 +66,57 @@ export class ProdutoRepository extends BaseRepository<Produto> {
     );
   }
 
+  async listarPaginado(
+    parametros: ParametrosPaginacao
+  ): Promise<ResultadoPaginado<ProdutoListagem>> {
+    const { pagina, limite, busca } = parametros;
+    const offset = (pagina - 1) * limite;
+    const termo = `%${busca}%`;
+
+    const condicao = `
+      CAST(id AS CHAR) LIKE ?
+      OR nome LIKE ?
+      OR categoria LIKE ?
+      OR descricao LIKE ?
+    `;
+
+    const parametrosBusca = [
+      termo,
+      termo,
+      termo,
+      termo,
+    ];
+
+    const [registros] = await database.execute<ProdutoRow[]>(
+      `SELECT id, nome, categoria, preco, descricao, imagem_url, estoque
+       FROM produtos
+       WHERE ${condicao}
+       ORDER BY id DESC
+       LIMIT ? OFFSET ?`,
+      [...parametrosBusca, limite, offset]
+    );
+
+    const [total] = await database.execute<TotalRow[]>(
+      `SELECT COUNT(*) AS total
+       FROM produtos
+       WHERE ${condicao}`,
+      parametrosBusca
+    );
+
+    return {
+      dados: registros.map((registro) => ({
+        id: Number(registro.id),
+        nome: registro.nome,
+        categoria: registro.categoria,
+        preco: Number(registro.preco),
+        descricao: registro.descricao,
+        imagem_url: registro.imagem_url,
+        estoque: Number(registro.estoque),
+      })),
+      total: Number(total[0]?.total ?? 0),
+    };
+  }
+
   async criar(dados: Produto): Promise<number> {
     dados.validar();
 
@@ -77,20 +140,10 @@ export class ProdutoRepository extends BaseRepository<Produto> {
   async atualizar(id: number, dados: Produto): Promise<boolean> {
     dados.validar();
 
-    const produtoExistente = await this.buscarPorId(id);
-
-    if (!produtoExistente) {
-      return false;
-    }
-
-    await database.execute<ResultSetHeader>(
+    const [resultado] = await database.execute<ResultSetHeader>(
       `UPDATE produtos
-       SET nome = ?,
-           categoria = ?,
-           preco = ?,
-           descricao = ?,
-           imagem_url = ?,
-           estoque = ?
+       SET nome = ?, categoria = ?, preco = ?,
+           descricao = ?, imagem_url = ?, estoque = ?
        WHERE id = ?`,
       [
         dados.nome,
@@ -103,12 +156,12 @@ export class ProdutoRepository extends BaseRepository<Produto> {
       ]
     );
 
-    return true;
+    return resultado.affectedRows > 0;
   }
 
   async excluir(id: number): Promise<boolean> {
     const [resultado] = await database.execute<ResultSetHeader>(
-      "DELETE FROM produtos WHERE id = ?",
+      `DELETE FROM produtos WHERE id = ?`,
       [id]
     );
 

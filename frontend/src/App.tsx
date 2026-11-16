@@ -1,6 +1,6 @@
 
 import { useEffect, useRef, useState, type FormEvent } from "react";
-
+import { AuthForms } from "./components/AuthForms";
 import { AuthProvider } from "./contexts/AuthContext";
 import { useAuth } from "./contexts/useAuth";
 import type { Usuario } from "./contexts/authContextCore";
@@ -14,13 +14,7 @@ import {
 } from "./utils/validacoes";
 
 import { API_URL, requisicaoAPI } from "./services/api";
-
 import "./App.css";
-
-// ============================================================
-// REQUISITO: PAGINAÇÃO
-// Define quantos registros serão exibidos por página.
-// ============================================================
 
 const ITENS_POR_PAGINA = 5;
 
@@ -32,10 +26,6 @@ type Modulo =
   | "funcionarios"
   | "vendas"
   | "perfil";
-
-// ============================================================
-// TIPOS DOS DADOS UTILIZADOS NO FRONTEND
-// ============================================================
 
 type Produto = {
   id: number;
@@ -58,11 +48,6 @@ type Registro = {
 
 type DadosFormulario = Record<string, string | number>;
 
-// ============================================================
-// REQUISITO: QUATRO CRUDs
-// Define os campos dos formulários de cada módulo.
-// ============================================================
-
 const formularios: Record<
   Exclude<Modulo, "perfil">,
   Record<string, string>
@@ -75,21 +60,16 @@ const formularios: Record<
     imagem_url: "",
     estoque: "",
   },
-
   clientes: {
     nome: "",
     email: "",
     telefone: "",
   },
-
   funcionarios: {
     nome: "",
     cargo: "",
     salario: "",
   },
-
-  // REQUISITO: RELACIONAMENTO ENTRE VENDAS E PRODUTOS.
-  // A venda utiliza produto_id para identificar o produto relacionado.
   vendas: {
     produto_id: "",
     quantidade: "",
@@ -97,7 +77,6 @@ const formularios: Record<
   },
 };
 
-// Rotas da API para cada CRUD.
 const rotas: Record<Exclude<Modulo, "perfil">, string> = {
   produtos: "/api/produtos",
   clientes: "/api/clientes",
@@ -106,11 +85,6 @@ const rotas: Record<Exclude<Modulo, "perfil">, string> = {
 };
 
 function AppConteudo() {
-  // ==========================================================
-  // REQUISITO: AUTENTICAÇÃO
-  // Utiliza o contexto para acessar usuário, token e sessão.
-  // ==========================================================
-
   const {
     usuario,
     token,
@@ -126,10 +100,7 @@ function AppConteudo() {
 
   const [modulo, setModulo] = useState<Modulo>("produtos");
 
-  // ==========================================================
-  // ESTADOS DE LOGIN E CADASTRO
-  // ==========================================================
-
+  // Estados de autenticação
   const [nome, setNome] = useState("");
   const [email, setEmail] = useState("");
   const [senha, setSenha] = useState("");
@@ -137,19 +108,12 @@ function AppConteudo() {
     useState("");
   const [cpf, setCpf] = useState("");
 
-  // ==========================================================
-  // ESTADOS DOS CRUDs
-  // ==========================================================
-
+  // Estados dos CRUDs
   const [produtos, setProdutos] = useState<Produto[]>([]);
   const [totalProdutos, setTotalProdutos] = useState(0);
   const [registros, setRegistros] = useState<Registro[]>([]);
 
-  // ==========================================================
-  // REQUISITO: EDIÇÃO DO PRÓPRIO PERFIL
-  // O e-mail será exibido, mas não poderá ser alterado.
-  // ==========================================================
-
+  // Estado do perfil
   const [perfil, setPerfil] = useState<Usuario>({
     nome: "",
     email: "",
@@ -162,10 +126,7 @@ function AppConteudo() {
   const [confirmarNovaSenha, setConfirmarNovaSenha] =
     useState("");
 
-  // ==========================================================
-  // ESTADOS DOS FORMULÁRIOS, PESQUISA E PAGINAÇÃO
-  // ==========================================================
-
+  // Estados gerais
   const [formulario, setFormulario] = useState<
     Record<string, string>
   >({});
@@ -178,17 +139,13 @@ function AppConteudo() {
     null
   );
 
-  const [mostrarFormulario, setMostrarFormulario] = useState(false);
+  const [mostrarFormulario, setMostrarFormulario] =
+    useState(false);
 
   const [paginaAtual, setPaginaAtual] = useState(1);
   const [totalPaginas, setTotalPaginas] = useState(1);
 
-  // ==========================================================
-  // REQUISITO: CONTROLE DE SESSÃO
-  // Quando a API informar que a sessão expirou, o usuário
-  // retorna para a tela de login.
-  // ==========================================================
-
+  // Controle de sessão expirada
   useEffect(() => {
     function tratarSessaoExpirada() {
       sairContexto();
@@ -225,12 +182,7 @@ function AppConteudo() {
     };
   }, [sairContexto]);
 
-  // ==========================================================
-  // REQUISITO: LOGIN COM E-MAIL E SENHA
-  // Valida o e-mail e envia as credenciais para a API.
-  // A API deve validar a senha e devolver o JWT.
-  // ==========================================================
-
+  // Login
   async function fazerLogin(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();
     setMensagem("");
@@ -260,7 +212,6 @@ function AppConteudo() {
       const dadosUsuario: Usuario =
         resultado.usuario || resultado.user || {};
 
-      // Armazena o token e os dados do usuário no contexto.
       entrar(resultado.token, dadosUsuario);
 
       setTela("dashboard");
@@ -277,12 +228,7 @@ function AppConteudo() {
     }
   }
 
-  // ==========================================================
-  // REQUISITO: CADASTRO DE USUÁRIO
-  // Valida nome, e-mail, CPF, senha forte e confirmação.
-  // O backend deve armazenar a senha usando hash seguro.
-  // ==========================================================
-
+  // Cadastro
   async function fazerCadastro(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();
     setMensagem("");
@@ -345,11 +291,7 @@ function AppConteudo() {
     }
   }
 
-  // ==========================================================
-  // REQUISITO: CONSULTA DO PRÓPRIO PERFIL
-  // Consulta os dados do usuário autenticado.
-  // ==========================================================
-
+  // Carregar perfil
   async function carregarPerfil() {
     try {
       const resultado = await requisicaoAPI(
@@ -380,12 +322,7 @@ function AppConteudo() {
     }
   }
 
-  // ==========================================================
-  // REQUISITO: LEITURA DOS QUATRO CRUDs
-  // Consulta os registros na API usando o token JWT.
-  // Também envia os parâmetros de pesquisa e paginação.
-  // ==========================================================
-
+  // Carregar os módulos
   async function carregarModulo(
     alvo: Modulo = modulo,
     pagina = paginaAtual,
@@ -432,7 +369,6 @@ function AppConteudo() {
         }
       }
 
-      // Atualiza o total de páginas informado pela API.
       const paginas = Number(
         resultado.totalPaginas ||
           resultado.paginas ||
@@ -452,7 +388,6 @@ function AppConteudo() {
     }
   }
 
-  // Referência utilizada para carregar os dados no useEffect.
   const carregarModuloRef = useRef(carregarModulo);
 
   useEffect(() => {
@@ -465,10 +400,7 @@ function AppConteudo() {
     setConfirmarNovaSenha("");
   }
 
-  // ==========================================================
-  // NAVEGAÇÃO ENTRE OS MÓDULOS
-  // ==========================================================
-
+  // Navegação
   function abrirModulo(alvo: Modulo) {
     setModulo(alvo);
     setBusca("");
@@ -483,11 +415,7 @@ function AppConteudo() {
     }
   }
 
-  // ==========================================================
-  // REQUISITO: CREATE DOS QUATRO CRUDs
-  // Prepara um formulário vazio para cadastrar um registro.
-  // ==========================================================
-
+  // Novo registro
   function abrirNovoRegistro() {
     if (modulo === "perfil") return;
 
@@ -497,11 +425,7 @@ function AppConteudo() {
     setMensagem("");
   }
 
-  // ==========================================================
-  // REQUISITO: UPDATE DOS QUATRO CRUDs
-  // Preenche o formulário com os dados do registro escolhido.
-  // ==========================================================
-
+  // Editar registro
   function editarRegistro(registro: Registro) {
     if (modulo === "perfil") return;
 
@@ -523,11 +447,7 @@ function AppConteudo() {
     setMensagem("");
   }
 
-  // ==========================================================
-  // REQUISITO: CREATE E UPDATE DOS QUATRO CRUDs
-  // Valida os dados e envia POST ou PUT para a API.
-  // ==========================================================
-
+  // Salvar registro
   async function salvarRegistro(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();
     setMensagem("");
@@ -539,7 +459,6 @@ function AppConteudo() {
 
       const dados: DadosFormulario = { ...formulario };
 
-      // Validações de produtos.
       if (modulo === "produtos") {
         if (!String(dados.nome || "").trim()) {
           throw new Error("Informe o nome do produto.");
@@ -558,7 +477,6 @@ function AppConteudo() {
         dados.estoque = Number(dados.estoque);
       }
 
-      // Validações de clientes.
       if (modulo === "clientes") {
         if (!String(dados.nome || "").trim()) {
           throw new Error("Informe o nome do cliente.");
@@ -574,7 +492,6 @@ function AppConteudo() {
         }
       }
 
-      // Validações de funcionários.
       if (modulo === "funcionarios") {
         if (!String(dados.nome || "").trim()) {
           throw new Error("Informe o nome do funcionário.");
@@ -588,12 +505,6 @@ function AppConteudo() {
 
         dados.salario = Number(dados.salario);
       }
-
-      // ========================================================
-      // REQUISITO: RELACIONAMENTO DE VENDAS COM PRODUTOS
-      // A venda precisa selecionar um produto existente.
-      // O backend também deve validar a existência desse produto.
-      // ========================================================
 
       if (modulo === "vendas") {
         if (
@@ -615,7 +526,6 @@ function AppConteudo() {
 
       const rota = rotas[modulo];
 
-      // POST cadastra. PUT atualiza o registro selecionado.
       const resultado = await requisicaoAPI(
         editandoId
           ? `${rota}/${editandoId}`
@@ -650,12 +560,7 @@ function AppConteudo() {
     }
   }
 
-  // ==========================================================
-  // REQUISITO: DELETE DOS QUATRO CRUDs
-  // Solicita confirmação e envia DELETE para a API.
-  // A API deve verificar se o registro existe antes de excluir.
-  // ==========================================================
-
+  // Excluir registro
   async function excluirRegistro(id: number) {
     if (
       !window.confirm(
@@ -682,8 +587,6 @@ function AppConteudo() {
           "Registro excluído com sucesso!"
       );
 
-      // Se a página ficar vazia após a exclusão,
-      // retorna para a página anterior.
       const paginaDestino =
         registros.length === 1 && paginaAtual > 1
           ? paginaAtual - 1
@@ -707,12 +610,7 @@ function AppConteudo() {
     }
   }
 
-  // ==========================================================
-  // REQUISITO: EDIÇÃO DO PRÓPRIO USUÁRIO
-  // Atualiza somente os dados do usuário autenticado.
-  // O e-mail não é enviado para alteração.
-  // ==========================================================
-
+  // Salvar perfil
   async function salvarPerfil(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();
     setMensagem("");
@@ -739,7 +637,6 @@ function AppConteudo() {
         (campo) => campo.length > 0
       );
 
-      // O e-mail não faz parte dos dados enviados para atualização.
       const dados: Record<string, string> = {
         nome: nomeAtualizado,
         cpf: cpfAtualizado.replace(/\D/g, ""),
@@ -748,9 +645,9 @@ function AppConteudo() {
 
       if (desejaAlterarSenha) {
         if (
-          senhaAtual.length === 0 ||
-          novaSenha.length === 0 ||
-          confirmarNovaSenha.length === 0
+          !senhaAtual ||
+          !novaSenha ||
+          !confirmarNovaSenha
         ) {
           throw new Error(
             "Para alterar sua senha, preencha a senha atual, a nova senha e a confirmação."
@@ -821,11 +718,7 @@ function AppConteudo() {
     }
   }
 
-  // ==========================================================
-  // REQUISITO: ENCERRAMENTO DA SESSÃO
-  // Limpa os dados locais e retorna para o login.
-  // ==========================================================
-
+  // Sair do sistema
   function sair() {
     sairContexto();
 
@@ -850,11 +743,7 @@ function AppConteudo() {
     setTela("login");
   }
 
-  // ==========================================================
-  // REQUISITO: PESQUISA E PAGINAÇÃO
-  // Recarrega os dados quando o módulo, página ou pesquisa muda.
-  // ==========================================================
-
+  // Pesquisa e paginação
   useEffect(() => {
     if (
       tela !== "dashboard" ||
@@ -873,14 +762,12 @@ function AppConteudo() {
     };
   }, [tela, token, modulo, paginaAtual, busca]);
 
-  // Filtra os produtos apresentados na página carregada.
   const produtosFiltrados = produtos.filter((produto) =>
     `${produto.nome} ${produto.categoria}`
       .toLowerCase()
       .includes(busca.toLowerCase())
   );
 
-  // Filtra os registros apresentados na página carregada.
   const registrosFiltrados = registros.filter((registro) =>
     Object.values(registro)
       .map((valor) => String(valor ?? ""))
@@ -897,10 +784,7 @@ function AppConteudo() {
     perfil: "Meu perfil",
   };
 
-  // ==========================================================
-  // CAMPOS DINÂMICOS DOS FORMULÁRIOS
-  // ==========================================================
-
+  // Campos dinâmicos dos formulários
   function campoFormulario(campo: string) {
     const nomes: Record<string, string> = {
       nome: "Nome",
@@ -918,7 +802,6 @@ function AppConteudo() {
       data_venda: "Data da venda",
     };
 
-    // Campo de seleção para o relacionamento venda-produto.
     if (campo === "produto_id") {
       return (
         <label key={campo}>
@@ -1012,10 +895,7 @@ function AppConteudo() {
     );
   }
 
-  // ==========================================================
-  // INTERFACE DO SISTEMA
-  // ==========================================================
-
+  // Interface
   return (
     <main className="app">
       <section className="painel">
@@ -1032,124 +912,38 @@ function AppConteudo() {
 
         <div className="conteudo">
           {mensagem && (
-            <div className="mensagem">{mensagem}</div>
+            <div className="mensagem">
+              {mensagem}
+            </div>
           )}
 
-          {/* REQUISITO: TELA DE LOGIN */}
+          {/* Login e cadastro ficam no componente AuthForms */}
+          <AuthForms
+            tela={tela}
+            carregando={carregando}
+            email={email}
+            setEmail={setEmail}
+            senha={senha}
+            setSenha={setSenha}
+            nome={nome}
+            setNome={setNome}
+            cpf={cpf}
+            setCpf={setCpf}
+            confirmarSenhaCadastro={confirmarSenhaCadastro}
+            setConfirmarSenhaCadastro={setConfirmarSenhaCadastro}
+            fazerLogin={fazerLogin}
+            fazerCadastro={fazerCadastro}
+            abrirCadastro={() => {
+              setMensagem("");
+              setTela("cadastro");
+            }}
+            voltarLogin={() => {
+              setMensagem("");
+              setTela("login");
+            }}
+          />
 
-          {tela === "login" && (
-            <form onSubmit={fazerLogin}>
-              <h2>Entrar no sistema</h2>
-
-              <label>E-mail</label>
-              <input
-                type="email"
-                autoComplete="username"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                placeholder="Digite seu e-mail"
-                required
-              />
-
-              <label>Senha</label>
-              <input
-                type="password"
-                autoComplete="current-password"
-                value={senha}
-                onChange={(e) => setSenha(e.target.value)}
-                placeholder="Digite sua senha"
-                required
-              />
-
-              <button type="submit" disabled={carregando}>
-                {carregando ? "Entrando..." : "Entrar"}
-              </button>
-
-              <p>
-                Não possui conta?{" "}
-                <button
-                  type="button"
-                  onClick={() => {
-                    setMensagem("");
-                    setTela("cadastro");
-                  }}
-                >
-                  Criar conta
-                </button>
-              </p>
-            </form>
-          )}
-
-          {/* REQUISITO: CADASTRO DE USUÁRIO */}
-
-          {tela === "cadastro" && (
-            <form onSubmit={fazerCadastro}>
-              <h2>Criar conta</h2>
-
-              <label>Nome completo</label>
-              <input
-                value={nome}
-                onChange={(e) => setNome(e.target.value)}
-                required
-              />
-
-              <label>E-mail</label>
-              <input
-                type="email"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                required
-              />
-
-              <label>CPF</label>
-              <input
-                value={cpf}
-                onChange={(e) => setCpf(e.target.value)}
-                maxLength={14}
-                placeholder="000.000.000-00"
-                required
-              />
-
-              <label>Senha</label>
-              <input
-                type="password"
-                autoComplete="new-password"
-                value={senha}
-                onChange={(e) => setSenha(e.target.value)}
-                placeholder="Mínimo 8 caracteres"
-                required
-              />
-
-              <label>Confirmar senha</label>
-              <input
-                type="password"
-                autoComplete="new-password"
-                value={confirmarSenhaCadastro}
-                onChange={(e) =>
-                  setConfirmarSenhaCadastro(e.target.value)
-                }
-                placeholder="Digite a senha novamente"
-                required
-              />
-
-              <button type="submit" disabled={carregando}>
-                {carregando ? "Cadastrando..." : "Cadastrar"}
-              </button>
-
-              <button
-                type="button"
-                onClick={() => {
-                  setMensagem("");
-                  setTela("login");
-                }}
-              >
-                Voltar ao login
-              </button>
-            </form>
-          )}
-
-          {/* REQUISITO: DASHBOARD E MÓDULOS DO SISTEMA */}
-
+          {/* Dashboard */}
           {tela === "dashboard" && (
             <div className="dashboard">
               <div className="dashboard-topo">
@@ -1168,8 +962,7 @@ function AppConteudo() {
                 </button>
               </div>
 
-              {/* RESUMO DO DASHBOARD */}
-
+              {/* Resumo */}
               <div className="resumo">
                 <div className="resumo-card">
                   <h3>{totalProdutos}</h3>
@@ -1182,8 +975,7 @@ function AppConteudo() {
                 </div>
               </div>
 
-              {/* NAVEGAÇÃO DOS QUATRO CRUDs E PERFIL */}
-
+              {/* Menu dos módulos */}
               <nav className="menu-crud">
                 {(
                   [
@@ -1232,8 +1024,7 @@ function AppConteudo() {
                 )}
               </div>
 
-              {/* REQUISITO: EDIÇÃO DO PRÓPRIO PERFIL */}
-
+              {/* Perfil */}
               {modulo === "perfil" && (
                 <form onSubmit={salvarPerfil}>
                   <h3>Editar meus dados</h3>
@@ -1344,8 +1135,7 @@ function AppConteudo() {
                 </form>
               )}
 
-              {/* REQUISITO: FORMULÁRIOS DOS QUATRO CRUDs */}
-
+              {/* CRUDs */}
               {modulo !== "perfil" && (
                 <>
                   {mostrarFormulario && (
@@ -1389,8 +1179,7 @@ function AppConteudo() {
                     </form>
                   )}
 
-                  {/* REQUISITO: PESQUISA DOS REGISTROS */}
-
+                  {/* Pesquisa */}
                   <div className="pesquisa">
                     <input
                       type="search"
@@ -1411,8 +1200,7 @@ function AppConteudo() {
                     </p>
                   )}
 
-                  {/* REQUISITO: CRUD DE PRODUTOS */}
-
+                  {/* Produtos */}
                   {!carregando && modulo === "produtos" && (
                     <div className="lista-produtos">
                       {produtosFiltrados.length === 0 ? (
@@ -1425,22 +1213,19 @@ function AppConteudo() {
                             className="produto-card"
                             key={produto.id}
                           >
-                            {/* IMAGEM COM ALTURA LIMITADA */}
-
                             {produto.imagem_url && (
                               <div className="produto-imagem">
-                              <img
-  className="produto-imagem"
-  src={
-    produto.imagem_url.startsWith("http")
-      ? produto.imagem_url
-      : `${API_URL}/${produto.imagem_url.replace(/^\/+/, "")}`
-  }
-  alt={produto.nome}
-  onError={(e) => {
-    e.currentTarget.style.display = "none";
-  }}
-/>
+                                <img
+                                  src={
+                                    produto.imagem_url.startsWith("http")
+                                      ? produto.imagem_url
+                                      : `${API_URL}/${produto.imagem_url.replace(/^\/+/, "")}`
+                                  }
+                                  alt={produto.nome}
+                                  onError={(e) => {
+                                    e.currentTarget.style.display = "none";
+                                  }}
+                                />
                               </div>
                             )}
 
@@ -1470,8 +1255,6 @@ function AppConteudo() {
                                 </span>
                               </div>
 
-                              {/* EDITAR E EXCLUIR PRODUTO */}
-
                               <div className="produto-acoes">
                                 <button
                                   type="button"
@@ -1485,9 +1268,7 @@ function AppConteudo() {
                                 <button
                                   type="button"
                                   onClick={() =>
-                                    void excluirRegistro(
-                                      produto.id
-                                    )
+                                    void excluirRegistro(produto.id)
                                   }
                                 >
                                   Excluir
@@ -1500,9 +1281,7 @@ function AppConteudo() {
                     </div>
                   )}
 
-                  {/* REQUISITO: CRUD DE CLIENTES,
-                      FUNCIONÁRIOS E VENDAS */}
-
+                  {/* Clientes, funcionários e vendas */}
                   {!carregando && modulo !== "produtos" && (
                     <div className="tabela-container">
                       {registrosFiltrados.length === 0 ? (
@@ -1519,16 +1298,13 @@ function AppConteudo() {
                                 formularios[modulo]
                               ).map((campo) => (
                                 <th key={campo}>
-                                  {campo === "produto_id"
+                                  {campo === "produto_id" ||
+                                  campo === "produto_nome"
                                     ? "Produto"
-                                    : campo === "produto_nome"
-                                      ? "Produto"
-                                      : campo === "data_venda"
-                                        ? "Data da venda"
-                                        : campo
-                                            .charAt(0)
-                                            .toUpperCase() +
-                                          campo.slice(1)}
+                                    : campo === "data_venda"
+                                      ? "Data da venda"
+                                      : campo.charAt(0).toUpperCase() +
+                                        campo.slice(1)}
                                 </th>
                               ))}
 
@@ -1537,86 +1313,78 @@ function AppConteudo() {
                           </thead>
 
                           <tbody>
-                            {registrosFiltrados.map(
-                              (registro) => (
-                                <tr key={registro.id}>
-                                  <td>{registro.id}</td>
+                            {registrosFiltrados.map((registro) => (
+                              <tr key={registro.id}>
+                                <td>{registro.id}</td>
 
-                                  {Object.keys(
-                                    formularios[modulo]
-                                  ).map((campo) => {
-                                    let valor = registro[campo];
+                                {Object.keys(
+                                  formularios[modulo]
+                                ).map((campo) => {
+                                  let valor = registro[campo];
 
-                                    if (
-                                      campo === "produto_id" &&
-                                      registro.produto_nome
-                                    ) {
-                                      valor =
-                                        registro.produto_nome;
-                                    }
+                                  if (
+                                    campo === "produto_id" &&
+                                    registro.produto_nome
+                                  ) {
+                                    valor = registro.produto_nome;
+                                  }
 
-                                    if (
-                                      campo === "data_venda" &&
-                                      typeof valor === "string"
-                                    ) {
-                                      valor = formatarData(valor);
-                                    }
+                                  if (
+                                    campo === "data_venda" &&
+                                    typeof valor === "string"
+                                  ) {
+                                    valor = formatarData(valor);
+                                  }
 
-                                    if (
-                                      campo === "preco" ||
-                                      campo === "salario"
-                                    ) {
-                                      valor = Number(
-                                        valor || 0
-                                      ).toLocaleString("pt-BR", {
-                                        style: "currency",
-                                        currency: "BRL",
-                                      });
-                                    }
+                                  if (
+                                    campo === "preco" ||
+                                    campo === "salario"
+                                  ) {
+                                    valor = Number(
+                                      valor || 0
+                                    ).toLocaleString("pt-BR", {
+                                      style: "currency",
+                                      currency: "BRL",
+                                    });
+                                  }
 
-                                    return (
-                                      <td key={campo}>
-                                        {String(valor ?? "-")}
-                                      </td>
-                                    );
-                                  })}
+                                  return (
+                                    <td key={campo}>
+                                      {String(valor ?? "-")}
+                                    </td>
+                                  );
+                                })}
 
-                                  {/* AÇÕES DE EDIÇÃO E EXCLUSÃO */}
+                                <td>
+                                  <div className="acoes-registro">
+                                    <button
+                                      type="button"
+                                      onClick={() =>
+                                        editarRegistro(registro)
+                                      }
+                                    >
+                                      Editar
+                                    </button>
 
-                                  <td>
-                                    <div className="acoes-registro">
-                                      <button
-                                        type="button"
-                                        onClick={() =>
-                                          editarRegistro(registro)
-                                        }
-                                      >
-                                        Editar
-                                      </button>
-
-                                      <button
-                                        type="button"
-                                        onClick={() =>
-                                          void excluirRegistro(
-                                            registro.id
-                                          )
-                                        }
-                                      >
-                                        Excluir
-                                      </button>
-                                    </div>
-                                  </td>
-                                </tr>
-                              )
-                            )}
+                                    <button
+                                      type="button"
+                                      onClick={() =>
+                                        void excluirRegistro(registro.id)
+                                      }
+                                    >
+                                      Excluir
+                                    </button>
+                                  </div>
+                                </td>
+                              </tr>
+                            ))}
                           </tbody>
                         </table>
                       )}
                     </div>
                   )}
 
-                  {/* REQUISITO: PAGINAÇÃO */}
-
+                  {/* Paginação */}
                   {!carregando && totalPaginas > 1 && (
                     <div className="paginacao">
                       <button
@@ -1663,12 +1431,7 @@ function AppConteudo() {
   );
 }
 
-// ============================================================
-// COMPONENTE PRINCIPAL
-// O AuthProvider disponibiliza os dados de autenticação
-// para todo o conteúdo do sistema.
-// ============================================================
-
+// Componente principal
 function App() {
   return (
     <AuthProvider>

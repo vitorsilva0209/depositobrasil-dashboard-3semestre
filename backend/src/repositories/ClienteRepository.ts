@@ -2,7 +2,13 @@
 import { ResultSetHeader, RowDataPacket } from "mysql2";
 import { database } from "../config/database";
 import { Cliente } from "../models/clienteModel";
-import { BaseRepository } from "./BaseRepository";
+import { ClienteListagem } from "../interfaces/ClienteListagem";
+import { IRepository } from "../interfaces/IRepository";
+import {
+  IPaginacaoRepository,
+  ParametrosPaginacao,
+  ResultadoPaginado,
+} from "../interfaces/Paginacao";
 
 interface ClienteRow extends RowDataPacket {
   id: number;
@@ -11,13 +17,19 @@ interface ClienteRow extends RowDataPacket {
   telefone: string | null;
 }
 
-export class ClienteRepository extends BaseRepository<Cliente> {
+interface TotalRow extends RowDataPacket {
+  total: number;
+}
+
+export class ClienteRepository
+  implements IRepository<Cliente>, IPaginacaoRepository<ClienteListagem>
+{
   private converterParaCliente(registro: ClienteRow): Cliente {
     return new Cliente(
       registro.nome,
       registro.email ?? "",
       registro.telefone ?? "",
-      registro.id
+      Number(registro.id)
     );
   }
 
@@ -48,17 +60,61 @@ export class ClienteRepository extends BaseRepository<Cliente> {
     );
   }
 
+  async listarPaginado(
+    parametros: ParametrosPaginacao
+  ): Promise<ResultadoPaginado<ClienteListagem>> {
+    const { pagina, limite, busca } = parametros;
+    const offset = (pagina - 1) * limite;
+    const termo = `%${busca}%`;
+
+    const condicao = `
+      CAST(id AS CHAR) LIKE ?
+      OR nome LIKE ?
+      OR email LIKE ?
+      OR telefone LIKE ?
+    `;
+
+    const parametrosBusca = [
+      termo,
+      termo,
+      termo,
+      termo,
+    ];
+
+    const [registros] = await database.execute<ClienteRow[]>(
+      `SELECT id, nome, email, telefone
+       FROM clientes
+       WHERE ${condicao}
+       ORDER BY id DESC
+       LIMIT ? OFFSET ?`,
+      [...parametrosBusca, limite, offset]
+    );
+
+    const [total] = await database.execute<TotalRow[]>(
+      `SELECT COUNT(*) AS total
+       FROM clientes
+       WHERE ${condicao}`,
+      parametrosBusca
+    );
+
+    return {
+      dados: registros.map((registro) => ({
+        id: Number(registro.id),
+        nome: registro.nome,
+        email: registro.email,
+        telefone: registro.telefone,
+      })),
+      total: Number(total[0]?.total ?? 0),
+    };
+  }
+
   async criar(dados: Cliente): Promise<number> {
     dados.validar();
 
     const [resultado] = await database.execute<ResultSetHeader>(
       `INSERT INTO clientes (nome, email, telefone)
        VALUES (?, ?, ?)`,
-      [
-        dados.nome,
-        dados.email || null,
-        dados.telefone || null,
-      ]
+      [dados.nome, dados.email, dados.telefone]
     );
 
     return resultado.insertId;
@@ -67,30 +123,19 @@ export class ClienteRepository extends BaseRepository<Cliente> {
   async atualizar(id: number, dados: Cliente): Promise<boolean> {
     dados.validar();
 
-    const existente = await this.buscarPorId(id);
-
-    if (!existente) {
-      return false;
-    }
-
-    await database.execute<ResultSetHeader>(
+    const [resultado] = await database.execute<ResultSetHeader>(
       `UPDATE clientes
        SET nome = ?, email = ?, telefone = ?
        WHERE id = ?`,
-      [
-        dados.nome,
-        dados.email || null,
-        dados.telefone || null,
-        id,
-      ]
+      [dados.nome, dados.email, dados.telefone, id]
     );
 
-    return true;
+    return resultado.affectedRows > 0;
   }
 
   async excluir(id: number): Promise<boolean> {
     const [resultado] = await database.execute<ResultSetHeader>(
-      "DELETE FROM clientes WHERE id = ?",
+      `DELETE FROM clientes WHERE id = ?`,
       [id]
     );
 

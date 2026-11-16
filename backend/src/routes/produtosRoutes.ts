@@ -1,8 +1,6 @@
 
 import { Router } from "express";
-import { database } from "../config/database";
 import { autenticarToken } from "../middlewares/authMiddleware";
-import { RowDataPacket } from "mysql2";
 import { Produto } from "../models/produtosModel";
 import { ProdutoRepository } from "../repositories/ProdutoRepository";
 import { ProdutoService } from "../services/produtoService";
@@ -12,47 +10,29 @@ const router = Router();
 const produtoRepository = new ProdutoRepository();
 const produtoService = new ProdutoService(produtoRepository);
 
-// Todas as rotas exigem autenticação.
 router.use(autenticarToken);
 
-// LISTAR PRODUTOS COM PAGINAÇÃO E BUSCA
+// LISTAR PRODUTOS COM BUSCA E PAGINAÇÃO
 router.get("/", async (req, res, next) => {
   try {
     const pagina = Math.max(1, Number(req.query.pagina) || 1);
     const limiteSolicitado = Number(req.query.limite) || 5;
     const limite = Math.min(100, Math.max(1, limiteSolicitado));
-    const offset = (pagina - 1) * limite;
     const busca = String(req.query.busca || "").trim();
 
-    const [produtos] = await database.execute<RowDataPacket[]>(
-      `SELECT id, nome, categoria, preco, descricao, imagem_url, estoque
-       FROM produtos
-       WHERE nome LIKE ? OR categoria LIKE ?
-       ORDER BY id DESC
-       LIMIT ? OFFSET ?`,
-      [`%${busca}%`, `%${busca}%`, limite, offset]
-    );
-
-    const [contagem] = await database.execute<RowDataPacket[]>(
-      `SELECT COUNT(*) AS total
-       FROM produtos
-       WHERE nome LIKE ? OR categoria LIKE ?`,
-      [`%${busca}%`, `%${busca}%`]
-    );
-
-    const totalRegistros = Number(contagem[0]?.total || 0);
-    const totalPaginas = Math.max(
-      1,
-      Math.ceil(totalRegistros / limite)
-    );
+    const resultado = await produtoService.listarPaginado({
+      pagina,
+      limite,
+      busca,
+    });
 
     return res.json({
       sucesso: true,
-      produtos,
+      produtos: resultado.dados,
       pagina,
       limite,
-      totalRegistros,
-      totalPaginas,
+      totalRegistros: resultado.total,
+      totalPaginas: Math.max(1, Math.ceil(resultado.total / limite)),
     });
   } catch (erro) {
     return next(erro);
@@ -145,7 +125,6 @@ router.put("/:id", async (req, res, next) => {
 router.delete("/:id", async (req, res, next) => {
   try {
     const id = Number(req.params.id);
-
     await produtoService.excluir(id);
 
     return res.json({

@@ -1,6 +1,12 @@
 
 import { Cliente } from "../models/clienteModel";
-import { ClienteRepository } from "../repositories/ClienteRepository";
+import { ClienteListagem } from "../interfaces/ClienteListagem";
+import { IRepository } from "../interfaces/IRepository";
+import {
+  IPaginacaoRepository,
+  ParametrosPaginacao,
+  ResultadoPaginado,
+} from "../interfaces/Paginacao";
 import {
   RecursoNaoEncontradoError,
   ErroValidacao,
@@ -8,11 +14,19 @@ import {
 
 export class ClienteService {
   constructor(
-    private readonly clienteRepository: ClienteRepository
+    private readonly clienteRepository:
+      IRepository<Cliente> &
+      IPaginacaoRepository<ClienteListagem>
   ) {}
 
   async listar(): Promise<Cliente[]> {
     return this.clienteRepository.listar();
+  }
+
+  async listarPaginado(
+    parametros: ParametrosPaginacao
+  ): Promise<ResultadoPaginado<ClienteListagem>> {
+    return this.clienteRepository.listarPaginado(parametros);
   }
 
   async buscarPorId(id: number): Promise<Cliente> {
@@ -37,10 +51,7 @@ export class ClienteService {
     this.validarId(id);
     dados.validar();
 
-    const atualizado = await this.clienteRepository.atualizar(
-      id,
-      dados
-    );
+    const atualizado = await this.clienteRepository.atualizar(id, dados);
 
     if (!atualizado) {
       throw new RecursoNaoEncontradoError("Cliente");

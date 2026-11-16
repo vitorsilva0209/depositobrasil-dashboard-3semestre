@@ -9,12 +9,37 @@
   box-sizing: border-box;
 }
 
+:root {
+  font-family: Arial, Helvetica, sans-serif;
+  color: #f5f5f5;
+  background: #171717;
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+
+  --cor-fundo: #171717;
+  --cor-painel: #242424;
+  --cor-card: #303030;
+  --cor-vermelho: #c62828;
+  --cor-vermelho-hover: #e53935;
+  --cor-texto: #f5f5f5;
+  --cor-texto-secundario: #bbbbbb;
+  --cor-borda: #444444;
+}
+
+html {
+  min-width: 320px;
+  min-height: 100%;
+  scroll-behavior: smooth;
+}
+
 body {
   min-width: 320px;
   min-height: 100vh;
   font-family: Arial, Helvetica, sans-serif;
-  background: #171717;
-  color: #f5f5f5;
+  background: var(--cor-fundo);
+  color: var(--cor-texto);
 }
 
 button,
@@ -34,9 +59,21 @@ button:disabled {
   cursor: not-allowed;
 }
 
+button:focus-visible,
+input:focus-visible,
+textarea:focus-visible,
+select:focus-visible {
+  outline: 2px solid var(--cor-vermelho-hover);
+  outline-offset: 2px;
+}
+
 /* =========================================
    ESTRUTURA PRINCIPAL
 ========================================= */
+
+#root {
+  min-height: 100vh;
+}
 
 .app {
   min-height: 100vh;
@@ -51,7 +88,7 @@ button:disabled {
   max-width: 1100px;
   min-height: 600px;
   overflow: hidden;
-  background: #242424;
+  background: var(--cor-painel);
   border: 1px solid #3a3a3a;
   border-radius: 18px;
   box-shadow: 0 15px 45px rgba(0, 0, 0, 0.35);
@@ -72,7 +109,7 @@ button:disabled {
   gap: 20px;
   padding: 28px 35px;
   background: #111111;
-  border-bottom: 4px solid #c62828;
+  border-bottom: 4px solid var(--cor-vermelho);
 }
 
 .marca h1 {
@@ -95,6 +132,7 @@ button:disabled {
   border-radius: 20px;
   font-size: 13px;
   font-weight: bold;
+  white-space: nowrap;
 }
 
 /* =========================================
@@ -106,8 +144,10 @@ button:disabled {
   padding: 13px 16px;
   color: #ffffff;
   background: #393939;
-  border-left: 4px solid #c62828;
+  border-left: 4px solid var(--cor-vermelho);
   border-radius: 6px;
+  line-height: 1.5;
+  overflow-wrap: anywhere;
 }
 
 .carregando {
@@ -141,6 +181,7 @@ label {
 input,
 textarea,
 select {
+  display: block;
   width: 100%;
   padding: 13px 14px;
   color: #ffffff;
@@ -148,12 +189,18 @@ select {
   border: 1px solid #555555;
   border-radius: 7px;
   outline: none;
+  transition: border-color 0.2s, box-shadow 0.2s;
+}
+
+input::placeholder,
+textarea::placeholder {
+  color: #999999;
 }
 
 input:focus,
 textarea:focus,
 select:focus {
-  border-color: #c62828;
+  border-color: var(--cor-vermelho);
   box-shadow: 0 0 0 2px rgba(198, 40, 40, 0.15);
 }
 
@@ -173,33 +220,34 @@ form > button,
   margin-top: 20px;
   padding: 12px 20px;
   color: #ffffff;
-  background: #c62828;
+  background: var(--cor-vermelho);
   border-radius: 7px;
   font-weight: bold;
-  transition: 0.2s;
+  transition: background 0.2s, transform 0.2s;
 }
 
 form > button:hover,
 .produtos-topo button:hover,
 .botao-atualizar:hover {
-  background: #e53935;
+  background: var(--cor-vermelho-hover);
 }
 
 form p {
   margin-top: 20px;
   color: #cccccc;
+  line-height: 1.5;
 }
 
 form p button {
   padding: 7px 12px;
   color: #ffffff;
   background: transparent;
-  border: 1px solid #c62828;
+  border: 1px solid var(--cor-vermelho);
   border-radius: 5px;
 }
 
 form p button:hover {
-  background: #c62828;
+  background: var(--cor-vermelho);
 }
 
 /* =========================================
@@ -235,10 +283,11 @@ form p button:hover {
   background: #b71c1c;
   border-radius: 7px;
   font-weight: bold;
+  transition: background 0.2s;
 }
 
 .botao-sair:hover {
-  background: #e53935;
+  background: var(--cor-vermelho-hover);
 }
 
 /* =========================================
@@ -253,10 +302,11 @@ form p button:hover {
 }
 
 .resumo-card {
+  min-width: 0;
   padding: 25px;
-  background: #303030;
-  border: 1px solid #444444;
-  border-left: 4px solid #c62828;
+  background: var(--cor-card);
+  border: 1px solid var(--cor-borda);
+  border-left: 4px solid var(--cor-vermelho);
   border-radius: 10px;
 }
 
@@ -264,6 +314,7 @@ form p button:hover {
   margin-bottom: 10px;
   color: #ffffff;
   font-size: 25px;
+  overflow-wrap: anywhere;
 }
 
 .resumo-card p {
@@ -283,17 +334,17 @@ form p button:hover {
 
 .menu-crud button {
   padding: 12px 20px;
-  border: 1px solid #c62828;
+  border: 1px solid var(--cor-vermelho);
   border-radius: 8px;
   background: #333333;
   color: #ffffff;
   font-weight: 600;
-  transition: 0.2s;
+  transition: background 0.2s, border-color 0.2s;
 }
 
 .menu-crud button:hover,
 .menu-crud button.menu-ativo {
-  background: #c62828;
+  background: var(--cor-vermelho);
   color: #ffffff;
 }
 
@@ -348,9 +399,11 @@ form p button:hover {
 ========================================= */
 
 .produto-card {
+  display: flex;
+  flex-direction: column;
   min-width: 0;
   overflow: hidden;
-  background: #303030;
+  background: var(--cor-card);
   border: 1px solid #454545;
   border-radius: 12px;
   transition: transform 0.2s, border-color 0.2s;
@@ -358,22 +411,30 @@ form p button:hover {
 
 .produto-card:hover {
   transform: translateY(-4px);
-  border-color: #c62828;
+  border-color: var(--cor-vermelho);
 }
 
 /* =========================================
    IMAGEM DO PRODUTO
-   Altura limitada para evitar imagens grandes.
 ========================================= */
 
 .produto-imagem {
-  display: block;
+  display: flex;
+  justify-content: center;
+  align-items: center;
   width: 100%;
   height: 180px;
   max-height: 180px;
   padding: 10px;
-  object-fit: contain;
+  overflow: hidden;
   background: #ffffff;
+}
+
+.produto-imagem img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
 }
 
 /* =========================================
@@ -381,6 +442,9 @@ form p button:hover {
 ========================================= */
 
 .produto-info {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
   padding: 18px;
 }
 
@@ -411,7 +475,7 @@ form p button:hover {
   align-items: center;
   flex-wrap: wrap;
   gap: 10px;
-  margin-top: 18px;
+  margin-top: auto;
   padding-top: 15px;
   border-top: 1px solid #484848;
 }
@@ -443,10 +507,11 @@ form p button:hover {
   background: #555555;
   border-radius: 6px;
   font-weight: bold;
+  transition: opacity 0.2s, background 0.2s;
 }
 
 .produto-acoes button:first-child {
-  background: #c62828;
+  background: var(--cor-vermelho);
 }
 
 .produto-acoes button:last-child {
@@ -464,8 +529,8 @@ form p button:hover {
 .formulario-crud {
   margin-bottom: 30px;
   padding: 22px;
-  background: #303030;
-  border: 1px solid #444444;
+  background: var(--cor-card);
+  border: 1px solid var(--cor-borda);
   border-radius: 10px;
 }
 
@@ -478,6 +543,10 @@ form p button:hover {
 
 .acoes-formulario button {
   margin-top: 0;
+}
+
+.acoes-formulario button + button {
+  margin-left: 0;
 }
 
 /* =========================================
@@ -508,6 +577,11 @@ form p button:hover {
 .tabela-container th {
   background: #171717;
   color: #ffffff;
+  white-space: nowrap;
+}
+
+.tabela-container td {
+  overflow-wrap: anywhere;
 }
 
 .tabela-container tr:hover {
@@ -527,11 +601,10 @@ form p button:hover {
 
 .acoes-registro button {
   padding: 8px 14px;
-  border: none;
   border-radius: 6px;
-  background: #c62828;
+  background: var(--cor-vermelho);
   color: #ffffff;
-  cursor: pointer;
+  transition: background 0.2s;
 }
 
 .acoes-registro button:hover {
@@ -554,13 +627,14 @@ form p button:hover {
 .paginacao button {
   padding: 10px 16px;
   color: #ffffff;
-  background: #c62828;
+  background: var(--cor-vermelho);
   border-radius: 6px;
   font-weight: bold;
+  transition: background 0.2s;
 }
 
 .paginacao button:hover:not(:disabled) {
-  background: #e53935;
+  background: var(--cor-vermelho-hover);
 }
 
 .paginacao span {
@@ -576,12 +650,12 @@ form p button:hover {
   padding: 25px;
   color: #bbbbbb;
   text-align: center;
-  background: #303030;
+  background: var(--cor-card);
   border-radius: 8px;
 }
 
 /* =========================================
-   ESPAÇAMENTO DOS BOTÕES
+   BOTÕES E ESPAÇAMENTOS
 ========================================= */
 
 .conteudo form button + button {
@@ -593,18 +667,30 @@ form p button:hover {
 }
 
 /* =========================================
-   RESPONSIVIDADE
+   RESPONSIVIDADE - TABLETS
 ========================================= */
 
 @media (max-width: 900px) {
   .lista-produtos {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
+
+  .conteudo {
+    padding: 28px;
+  }
 }
+
+/* =========================================
+   RESPONSIVIDADE - CELULARES
+========================================= */
 
 @media (max-width: 550px) {
   .app {
     padding: 12px;
+  }
+
+  .painel {
+    border-radius: 12px;
   }
 
   .cabecalho {
@@ -649,7 +735,15 @@ form p button:hover {
     flex: 1;
   }
 
+  .menu-crud button {
+    flex: 1 1 auto;
+  }
+
   .paginacao {
     gap: 8px;
+  }
+
+  .tabela-container table {
+    min-width: 550px;
   }
 }

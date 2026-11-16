@@ -1,11 +1,7 @@
 
 import { Router } from "express";
-import { RowDataPacket } from "mysql2";
-
-import { database } from "../config/database";
 import { autenticarToken } from "../middlewares/authMiddleware";
 import { ErroValidacao } from "../errors/AppError";
-
 import { Venda } from "../models/vendaModel";
 import { VendaRepository } from "../repositories/VendaRepository";
 import { ProdutoRepository } from "../repositories/ProdutoRepository";
@@ -23,7 +19,7 @@ const vendaService = new VendaService(
 
 router.use(autenticarToken);
 
-// NORMALIZAR DATA DA VENDA
+// NORMALIZAR E VALIDAR DATA DA VENDA
 function normalizarDataVenda(
   valor: unknown
 ): string | undefined | null {
@@ -35,7 +31,7 @@ function normalizarDataVenda(
     return null;
   }
 
-  const correspondencia = valor.match(
+  const correspondencia = valor.trim().match(
     /^(\d{4})-(\d{2})-(\d{2})[T ](\d{2}):(\d{2})(?::(\d{2}))?$/
   );
 
@@ -43,35 +39,45 @@ function normalizarDataVenda(
     return null;
   }
 
-  const [, ano, mes, dia, hora, minuto, segundo = "00"] =
-    correspondencia;
+  const [
+    ,
+    anoTexto,
+    mesTexto,
+    diaTexto,
+    horaTexto,
+    minutoTexto,
+    segundoTexto = "00",
+  ] = correspondencia;
 
-  const data = new Date(
-    Date.UTC(
-      Number(ano),
-      Number(mes) - 1,
-      Number(dia),
-      Number(hora),
-      Number(minuto),
-      Number(segundo)
-    )
-  );
+  const ano = Number(anoTexto);
+  const mes = Number(mesTexto);
+  const dia = Number(diaTexto);
+  const hora = Number(horaTexto);
+  const minuto = Number(minutoTexto);
+  const segundo = Number(segundoTexto);
 
   if (
-    data.getUTCFullYear() !== Number(ano) ||
-    data.getUTCMonth() + 1 !== Number(mes) ||
-    data.getUTCDate() !== Number(dia) ||
-    Number(hora) > 23 ||
-    Number(minuto) > 59 ||
-    Number(segundo) > 59
+    mes < 1 ||
+    mes > 12 ||
+    hora > 23 ||
+    minuto > 59 ||
+    segundo > 59
   ) {
     return null;
   }
 
-  return `${ano}-${mes}-${dia} ${hora}:${minuto}:${segundo}`;
+  const ultimoDiaMes = new Date(
+    Date.UTC(ano, mes, 0)
+  ).getUTCDate();
+
+  if (dia < 1 || dia > ultimoDiaMes) {
+    return null;
+  }
+
+  return `${anoTexto}-${mesTexto}-${diaTexto} ${horaTexto}:${minutoTexto}:${segundoTexto}`;
 }
 
-// LISTAR VENDAS COM PAGINAÇÃO
+// LISTAR VENDAS COM PESQUISA E PAGINAÇÃO
 router.get("/", async (req, res, next) => {
   try {
     const pagina = Math.max(
@@ -84,35 +90,21 @@ router.get("/", async (req, res, next) => {
       Math.max(1, Math.floor(Number(req.query.limite) || 10))
     );
 
-    const offset = (pagina - 1) * limite;
+    const busca = String(req.query.busca || "").trim();
 
-    const [vendas] = await database.execute<RowDataPacket[]>(
-      `SELECT
-         v.id,
-         v.produto_id,
-         p.nome AS produto,
-         v.quantidade,
-         v.data_venda
-       FROM vendas v
-       INNER JOIN produtos p ON p.id = v.produto_id
-       ORDER BY v.id DESC
-       LIMIT ? OFFSET ?`,
-      [limite, offset]
-    );
-
-    const [total] = await database.query<RowDataPacket[]>(
-      "SELECT COUNT(*) AS total FROM vendas"
-    );
-
-    const quantidadeTotal = Number(total[0].total);
+    const resultado = await vendaService.listarPaginado({
+      pagina,
+      limite,
+      busca,
+    });
 
     return res.json({
       sucesso: true,
-      vendas,
+      vendas: resultado.dados,
       pagina,
       limite,
-      total: quantidadeTotal,
-      totalPaginas: Math.ceil(quantidadeTotal / limite),
+      total: resultado.total,
+      totalPaginas: Math.ceil(resultado.total / limite),
     });
   } catch (erro) {
     return next(erro);
@@ -123,7 +115,6 @@ router.get("/", async (req, res, next) => {
 router.get("/:id", async (req, res, next) => {
   try {
     const id = Number(req.params.id);
-
     const venda = await vendaService.buscarPorId(id);
 
     return res.json({

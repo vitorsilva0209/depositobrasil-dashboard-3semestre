@@ -1,6 +1,12 @@
 
 import { Funcionario } from "../models/funcionarioModel";
-import { FuncionarioRepository } from "../repositories/FuncionarioRepository";
+import { IRepository } from "../interfaces/IRepository";
+import { FuncionarioListagem } from "../interfaces/FuncionarioListagem";
+import {
+  IPaginacaoRepository,
+  ParametrosPaginacao,
+  ResultadoPaginado,
+} from "../interfaces/Paginacao";
 import {
   RecursoNaoEncontradoError,
   ErroValidacao,
@@ -8,11 +14,19 @@ import {
 
 export class FuncionarioService {
   constructor(
-    private readonly funcionarioRepository: FuncionarioRepository
+    private readonly funcionarioRepository:
+      IRepository<Funcionario> &
+      IPaginacaoRepository<FuncionarioListagem>
   ) {}
 
   async listar(): Promise<Funcionario[]> {
     return this.funcionarioRepository.listar();
+  }
+
+  async listarPaginado(
+    parametros: ParametrosPaginacao
+  ): Promise<ResultadoPaginado<FuncionarioListagem>> {
+    return this.funcionarioRepository.listarPaginado(parametros);
   }
 
   async buscarPorId(id: number): Promise<Funcionario> {
@@ -30,14 +44,10 @@ export class FuncionarioService {
 
   async cadastrar(dados: Funcionario): Promise<number> {
     dados.validar();
-
     return this.funcionarioRepository.criar(dados);
   }
 
-  async atualizar(
-    id: number,
-    dados: Funcionario
-  ): Promise<void> {
+  async atualizar(id: number, dados: Funcionario): Promise<void> {
     this.validarId(id);
     dados.validar();
 

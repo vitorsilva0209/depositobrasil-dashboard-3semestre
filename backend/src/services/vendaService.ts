@@ -1,7 +1,14 @@
 
 import { Venda } from "../models/vendaModel";
-import { VendaRepository } from "../repositories/VendaRepository";
-import { ProdutoRepository } from "../repositories/ProdutoRepository";
+import { Produto } from "../models/produtosModel";
+import { IReadRepository } from "../interfaces/IReadRepository";
+import { IWriteRepository } from "../interfaces/IWriteRepository";
+import { VendaListagem } from "../interfaces/VendaListagem";
+import {
+  IPaginacaoRepository,
+  ParametrosPaginacao,
+  ResultadoPaginado,
+} from "../interfaces/Paginacao";
 import {
   RecursoNaoEncontradoError,
   ErroValidacao,
@@ -9,12 +16,21 @@ import {
 
 export class VendaService {
   constructor(
-    private readonly vendaRepository: VendaRepository,
-    private readonly produtoRepository: ProdutoRepository
+    private readonly vendaRepository:
+      IReadRepository<Venda> &
+      IWriteRepository<Venda> &
+      IPaginacaoRepository<VendaListagem>,
+    private readonly produtoRepository: IReadRepository<Produto>
   ) {}
 
   async listar(): Promise<Venda[]> {
     return this.vendaRepository.listar();
+  }
+
+  async listarPaginado(
+    parametros: ParametrosPaginacao
+  ): Promise<ResultadoPaginado<VendaListagem>> {
+    return this.vendaRepository.listarPaginado(parametros);
   }
 
   async buscarPorId(id: number): Promise<Venda> {
@@ -41,10 +57,7 @@ export class VendaService {
     dados.validar();
     await this.validarProduto(dados.produtoId);
 
-    const atualizado = await this.vendaRepository.atualizar(
-      id,
-      dados
-    );
+    const atualizado = await this.vendaRepository.atualizar(id, dados);
 
     if (!atualizado) {
       throw new RecursoNaoEncontradoError("Venda");
