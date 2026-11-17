@@ -9,42 +9,52 @@ export function autenticarToken(
   req: RequisicaoAutenticada,
   res: Response,
   next: NextFunction
-) {
+): void {
   const autorizacao = req.headers.authorization;
 
-  if (!autorizacao || !autorizacao.startsWith("Bearer ")) {
-    return res.status(401).json({
+  if (!autorizacao || !/^Bearer [^\s]+$/.test(autorizacao)) {
+    res.status(401).json({
       sucesso: false,
-      mensagem: "Token de autenticação não informado."
+      mensagem: "Token de autenticação não informado.",
     });
+    return;
   }
 
-  const token = autorizacao.split(" ")[1];
+  const token = autorizacao.slice(7);
   const segredo = process.env.JWT_SECRET;
 
   if (!segredo || segredo.length < 32) {
-    return res.status(500).json({
+    res.status(500).json({
       sucesso: false,
-      mensagem: "Configuração JWT inválida no servidor."
+      mensagem: "Configuração JWT inválida no servidor.",
     });
+    return;
   }
 
   try {
-    const dados = jwt.verify(token, segredo);
+    const dados = jwt.verify(token, segredo, {
+      algorithms: ["HS256"],
+    });
 
-    if (typeof dados === "string" || !dados.sub) {
-      return res.status(401).json({
+    if (
+      typeof dados === "string" ||
+      typeof dados.sub !== "string" ||
+      !/^[1-9]\d*$/.test(dados.sub) ||
+      !Number.isSafeInteger(Number(dados.sub))
+    ) {
+      res.status(401).json({
         sucesso: false,
-        mensagem: "Token inválido."
+        mensagem: "Token inválido.",
       });
+      return;
     }
 
     req.usuarioId = dados.sub;
     next();
   } catch {
-    return res.status(401).json({
+    res.status(401).json({
       sucesso: false,
-      mensagem: "Token inválido ou expirado."
+      mensagem: "Token inválido ou expirado.",
     });
   }
 }

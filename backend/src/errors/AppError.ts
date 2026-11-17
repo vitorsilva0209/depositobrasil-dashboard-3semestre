@@ -1,4 +1,3 @@
-
 export class AppError extends Error {
   public readonly statusCode: number;
   public readonly detalhes?: unknown;
@@ -10,24 +9,22 @@ export class AppError extends Error {
   ) {
     super(mensagem);
 
-    this.name = "AppError";
+    this.name = new.target.name;
     this.statusCode = statusCode;
     this.detalhes = detalhes;
 
-    Object.setPrototypeOf(this, AppError.prototype);
+    Object.setPrototypeOf(this, new.target.prototype);
   }
 }
 
 export class RecursoNaoEncontradoError extends AppError {
   constructor(recurso: string) {
     super(`${recurso} não encontrado.`, 404);
-    this.name = "RecursoNaoEncontradoError";
   }
 }
 
 export class ErroValidacao extends AppError {
   constructor(mensagem: string) {
     super(mensagem, 422);
-    this.name = "ErroValidacao";
   }
 }

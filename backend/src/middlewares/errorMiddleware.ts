@@ -1,4 +1,3 @@
-
 import type { ErrorRequestHandler } from "express";
 import { AppError } from "../errors/AppError";
 
@@ -8,7 +7,6 @@ export const errorMiddleware: ErrorRequestHandler = (
   res,
   _next
 ) => {
-  // Mantém a assinatura de quatro parâmetros exigida pelo Express.
   void _next;
 
   if (erro instanceof AppError) {
@@ -20,7 +18,8 @@ export const errorMiddleware: ErrorRequestHandler = (
     return;
   }
 
-  console.error("Erro inesperado:", erro);
+  // Não registrar dados de usuários, senhas ou detalhes do banco.
+  console.error("Erro interno não tratado na API.");
 
   res.status(500).json({
     sucesso: false,

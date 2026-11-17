@@ -133,8 +133,6 @@ export class VendaRepository
   }
 
   async criar(dados: Venda): Promise<number> {
-    dados.validar();
-
     let resultado: ResultSetHeader;
 
     if (dados.dataVenda) {
@@ -155,8 +153,6 @@ export class VendaRepository
   }
 
   async atualizar(id: number, dados: Venda): Promise<boolean> {
-    dados.validar();
-
     const existente = await this.buscarPorId(id);
 
     if (!existente) {

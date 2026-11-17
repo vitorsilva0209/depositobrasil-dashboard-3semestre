@@ -76,12 +76,7 @@ export class FuncionarioRepository
       OR CAST(salario AS CHAR) LIKE ?
     `;
 
-    const parametrosBusca = [
-      termo,
-      termo,
-      termo,
-      termo,
-    ];
+    const parametrosBusca = [termo, termo, termo, termo];
 
     const [registros] = await database.execute<FuncionarioRow[]>(
       `SELECT id, nome, cargo, salario
@@ -111,8 +106,6 @@ export class FuncionarioRepository
   }
 
   async criar(dados: Funcionario): Promise<number> {
-    dados.validar();
-
     const [resultado] = await database.execute<ResultSetHeader>(
       `INSERT INTO funcionarios (nome, cargo, salario)
        VALUES (?, ?, ?)`,
@@ -126,8 +119,6 @@ export class FuncionarioRepository
     id: number,
     dados: Funcionario
   ): Promise<boolean> {
-    dados.validar();
-
     const [resultado] = await database.execute<ResultSetHeader>(
       `UPDATE funcionarios
        SET nome = ?, cargo = ?, salario = ?
@@ -135,7 +126,19 @@ export class FuncionarioRepository
       [dados.nome, dados.cargo, dados.salario, id]
     );
 
-    return resultado.affectedRows > 0;
+    if (resultado.affectedRows > 0) {
+      return true;
+    }
+
+    // Confirma se o funcionário existe quando nenhuma linha foi alterada.
+    const [registros] = await database.execute<FuncionarioRow[]>(
+      `SELECT id
+       FROM funcionarios
+       WHERE id = ?`,
+      [id]
+    );
+
+    return registros.length > 0;
   }
 
   async excluir(id: number): Promise<boolean> {

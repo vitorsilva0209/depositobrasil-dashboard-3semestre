@@ -74,12 +74,7 @@ export class ClienteRepository
       OR telefone LIKE ?
     `;
 
-    const parametrosBusca = [
-      termo,
-      termo,
-      termo,
-      termo,
-    ];
+    const parametrosBusca = [termo, termo, termo, termo];
 
     const [registros] = await database.execute<ClienteRow[]>(
       `SELECT id, nome, email, telefone
@@ -109,8 +104,6 @@ export class ClienteRepository
   }
 
   async criar(dados: Cliente): Promise<number> {
-    dados.validar();
-
     const [resultado] = await database.execute<ResultSetHeader>(
       `INSERT INTO clientes (nome, email, telefone)
        VALUES (?, ?, ?)`,
@@ -121,8 +114,6 @@ export class ClienteRepository
   }
 
   async atualizar(id: number, dados: Cliente): Promise<boolean> {
-    dados.validar();
-
     const [resultado] = await database.execute<ResultSetHeader>(
       `UPDATE clientes
        SET nome = ?, email = ?, telefone = ?
@@ -130,7 +121,19 @@ export class ClienteRepository
       [dados.nome, dados.email, dados.telefone, id]
     );
 
-    return resultado.affectedRows > 0;
+    if (resultado.affectedRows > 0) {
+      return true;
+    }
+
+    // affectedRows pode ser zero quando os dados não mudaram.
+    const [registros] = await database.execute<ClienteRow[]>(
+      `SELECT id
+       FROM clientes
+       WHERE id = ?`,
+      [id]
+    );
+
+    return registros.length > 0;
   }
 
   async excluir(id: number): Promise<boolean> {

@@ -1,64 +1,80 @@
-import { Request, Response } from "express";
-import {
-  registrarUsuario,
-  autenticarUsuario
-} from "../services/authService";
+import { Request, Response, NextFunction } from "express";
+import { authService } from "../config/dependencies";
+import { AppError } from "../errors/AppError";
 
-
-export async function registrar(req: Request, res: Response) {
+export async function registrar(
+  req: Request,
+  res: Response,
+  next: NextFunction
+): Promise<void> {
   try {
-    const usuario = await registrarUsuario(req.body);
+    const { nome, email, cpf, senha, confirmarSenha } = req.body ?? {};
 
-    return res.status(201).json({
+    if (
+      typeof nome !== "string" ||
+      typeof email !== "string" ||
+      typeof cpf !== "string" ||
+      typeof senha !== "string" ||
+      typeof confirmarSenha !== "string"
+    ) {
+      throw new AppError(
+        "Informe todos os campos obrigatórios.",
+        400
+      );
+    }
+
+    const usuario = await authService.registrarUsuario({
+      nome,
+      email,
+      cpf,
+      senha,
+      confirmarSenha,
+    });
+
+    res.status(201).json({
       sucesso: true,
       mensagem: "Usuário cadastrado com sucesso.",
-      usuario
+      usuario,
     });
   } catch (erro) {
-    const mensagem =
-      erro instanceof Error ? erro.message : "Erro ao cadastrar usuário.";
-
-    const status = mensagem.includes("já está cadastrado") ? 409 : 400;
-
-    return res.status(status).json({
-      sucesso: false,
-      mensagem
-    });
+    next(erro);
   }
 }
 
-export async function login(req: Request, res: Response) {
+export async function login(
+  req: Request,
+  res: Response,
+  next: NextFunction
+): Promise<void> {
   try {
-    const { email, senha } = req.body;
+    const { email, senha } = req.body ?? {};
 
-    if (typeof email !== "string" || typeof senha !== "string") {
-      return res.status(400).json({
-        sucesso: false,
-        mensagem: "Informe o e-mail e a senha."
-      });
+    if (
+      typeof email !== "string" ||
+      typeof senha !== "string"
+    ) {
+      throw new AppError(
+        "Informe o e-mail e a senha.",
+        400
+      );
     }
 
-    const usuario = await autenticarUsuario(email, senha);
+    const usuario = await authService.autenticarUsuario(
+      email,
+      senha
+    );
 
-    return res.status(200).json({
+    res.status(200).json({
       sucesso: true,
       mensagem: "Login realizado com sucesso.",
       token: usuario.token,
       usuario: {
         id: usuario.id,
         nome: usuario.nome,
-        email: usuario.email
-      }
+        email: usuario.email,
+      },
     });
   } catch (erro) {
-    const mensagem =
-      erro instanceof Error ? erro.message : "Erro ao realizar login.";
-
-    const credenciaisInvalidas = mensagem === "E-mail ou senha incorretos.";
-
-    return res.status(credenciaisInvalidas ? 401 : 400).json({
-      sucesso: false,
-      mensagem
-    });
+    next(erro);
   }
 }

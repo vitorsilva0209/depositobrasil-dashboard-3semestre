@@ -118,8 +118,6 @@ export class ProdutoRepository
   }
 
   async criar(dados: Produto): Promise<number> {
-    dados.validar();
-
     const [resultado] = await database.execute<ResultSetHeader>(
       `INSERT INTO produtos
        (nome, categoria, preco, descricao, imagem_url, estoque)
@@ -138,8 +136,6 @@ export class ProdutoRepository
   }
 
   async atualizar(id: number, dados: Produto): Promise<boolean> {
-    dados.validar();
-
     const [resultado] = await database.execute<ResultSetHeader>(
       `UPDATE produtos
        SET nome = ?, categoria = ?, preco = ?,
@@ -156,7 +152,19 @@ export class ProdutoRepository
       ]
     );
 
-    return resultado.affectedRows > 0;
+    if (resultado.affectedRows > 0) {
+      return true;
+    }
+
+    // Diferencia registro inexistente de atualização sem alterações.
+    const [registros] = await database.execute<ProdutoRow[]>(
+      `SELECT id
+       FROM produtos
+       WHERE id = ?`,
+      [id]
+    );
+
+    return registros.length > 0;
   }
 
   async excluir(id: number): Promise<boolean> {

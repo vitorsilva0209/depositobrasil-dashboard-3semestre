@@ -1,166 +1,150 @@
-
 import bcrypt from "bcrypt";
 import jwt, { SignOptions } from "jsonwebtoken";
+import { IUsuarioRepository } from "../interfaces/IUsuarioRepository";
+import { AppError } from "../errors/AppError";
 import {
-  buscarUsuarioPorEmail,
-  buscarUsuarioPorCPF,
-  cadastrarUsuario
-} from "../models/usuarioModel";
+  validarCPF,
+  validarEmail,
+  validarSenha,
+} from "../utils/validacoes";
 
-function validarEmail(email: string): boolean {
-  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
-}
-
-function validarCPF(cpf: string): boolean {
-  const numeros = cpf.replace(/\D/g, "");
-
-  if (numeros.length !== 11 || /^(\d)\1{10}$/.test(numeros)) {
-    return false;
-  }
-
-  let soma = 0;
-
-  for (let i = 0; i < 9; i++) {
-    soma += Number(numeros[i]) * (10 - i);
-  }
-
-  let digito = (soma * 10) % 11;
-  if (digito === 10) digito = 0;
-
-  if (digito !== Number(numeros[9])) {
-    return false;
-  }
-
-  soma = 0;
-
-  for (let i = 0; i < 10; i++) {
-    soma += Number(numeros[i]) * (11 - i);
-  }
-
-  digito = (soma * 10) % 11;
-  if (digito === 10) digito = 0;
-
-  return digito === Number(numeros[10]);
-}
-
-function validarSenha(senha: string): boolean {
-  return (
-    senha.length >= 8 &&
-    /[A-Z]/.test(senha) &&
-    /[a-z]/.test(senha) &&
-    /\d/.test(senha) &&
-    /[^A-Za-z0-9]/.test(senha)
-  );
-}
-
-function gerarToken(id: number, email: string): string {
-  const segredo = process.env.JWT_SECRET;
-
-  if (!segredo || segredo.length < 32) {
-    throw new Error("Configure uma JWT_SECRET com pelo menos 32 caracteres.");
-  }
-
-  const expiracao: SignOptions["expiresIn"] =
-    (process.env.JWT_EXPIRES_IN || "1h") as SignOptions["expiresIn"];
-
-  return jwt.sign(
-    { email },
-    segredo,
-    {
-      subject: String(id),
-      expiresIn: expiracao
-    }
-  );
-}
-
-export async function registrarUsuario(dados: {
+export interface DadosRegistro {
   nome: string;
   email: string;
   cpf: string;
   senha: string;
   confirmarSenha: string;
-}) {
-  const nome = dados.nome.trim();
-  const email = dados.email.trim().toLowerCase();
-  const cpf = dados.cpf.replace(/\D/g, "");
-  const senha = dados.senha;
+}
 
-  if (!nome || !email || !dados.cpf.trim() || !senha || !dados.confirmarSenha) {
-    throw new Error("Preencha todos os campos obrigatórios.");
-  }
+export class AuthService {
+  constructor(
+    private readonly usuarioRepository: IUsuarioRepository
+  ) {}
 
-  if (!validarEmail(email)) {
-    throw new Error("Informe um e-mail válido.");
-  }
+  private gerarToken(id: number, email: string): string {
+    const segredo = process.env.JWT_SECRET;
 
-  if (!validarCPF(cpf)) {
-    throw new Error("CPF inválido.");
-  }
+    if (!segredo || segredo.length < 32) {
+      throw new AppError(
+        "Configuração de autenticação indisponível.",
+        500
+      );
+    }
 
-  if (!validarSenha(senha)) {
-    throw new Error(
-      "A senha deve ter pelo menos 8 caracteres, uma letra maiúscula, uma minúscula, um número e um caractere especial."
+    const expiracao: SignOptions["expiresIn"] =
+      (process.env.JWT_EXPIRES_IN || "1h") as SignOptions["expiresIn"];
+
+    return jwt.sign(
+      { email },
+      segredo,
+      {
+        subject: String(id),
+        expiresIn: expiracao,
+        algorithm: "HS256",
+      }
     );
   }
 
-  if (senha !== dados.confirmarSenha) {
-    throw new Error("As senhas não coincidem.");
+  async registrarUsuario(dados: DadosRegistro) {
+    const nome = dados.nome.trim();
+    const email = dados.email.trim().toLowerCase();
+    const cpf = dados.cpf.replace(/\D/g, "");
+    const senha = dados.senha;
+
+    if (
+      !nome ||
+      !email ||
+      !dados.cpf.trim() ||
+      !senha ||
+      !dados.confirmarSenha
+    ) {
+      throw new AppError(
+        "Preencha todos os campos obrigatórios.",
+        400
+      );
+    }
+
+    if (!validarEmail(email)) {
+      throw new AppError("Informe um e-mail válido.", 400);
+    }
+
+    if (!validarCPF(cpf)) {
+      throw new AppError("CPF inválido.", 400);
+    }
+
+    if (!validarSenha(senha)) {
+      throw new AppError(
+        "A senha deve ter pelo menos 8 caracteres, uma letra maiúscula, uma minúscula, um número e um caractere especial.",
+        400
+      );
+    }
+
+    if (senha !== dados.confirmarSenha) {
+      throw new AppError("As senhas não coincidem.", 400);
+    }
+
+    if (await this.usuarioRepository.buscarPorEmail(email)) {
+      throw new AppError("Este e-mail já está cadastrado.", 409);
+    }
+
+    if (await this.usuarioRepository.buscarPorCPF(cpf)) {
+      throw new AppError("Este CPF já está cadastrado.", 409);
+    }
+
+    const senhaHash = await bcrypt.hash(senha, 12);
+
+    const id = await this.usuarioRepository.criar({
+      nome,
+      email,
+      cpf,
+      senha: senhaHash,
+    });
+
+    return {
+      id,
+      nome,
+      email,
+      token: this.gerarToken(id, email),
+    };
   }
 
-  if (await buscarUsuarioPorEmail(email)) {
-    throw new Error("Este e-mail já está cadastrado.");
+  async autenticarUsuario(emailInformado: string, senha: string) {
+    const email = emailInformado.trim().toLowerCase();
+
+    if (!email || !senha || !validarEmail(email)) {
+      throw new AppError(
+        "Informe um e-mail e uma senha válidos.",
+        400
+      );
+    }
+
+    const usuario =
+      await this.usuarioRepository.buscarPorEmail(email);
+
+    if (!usuario) {
+      throw new AppError(
+        "E-mail ou senha incorretos.",
+        401
+      );
+    }
+
+    const senhaCorreta = await bcrypt.compare(
+      senha,
+      usuario.senha
+    );
+
+    if (!senhaCorreta) {
+      throw new AppError(
+        "E-mail ou senha incorretos.",
+        401
+      );
+    }
+
+    return {
+      id: usuario.id,
+      nome: usuario.nome,
+      email: usuario.email,
+      token: this.gerarToken(usuario.id, usuario.email),
+    };
   }
-
-  if (await buscarUsuarioPorCPF(cpf)) {
-    throw new Error("Este CPF já está cadastrado.");
-  }
-
-  const senhaHash = await bcrypt.hash(senha, 12);
-
-  await cadastrarUsuario({
-    nome,
-    email,
-    cpf,
-    senha: senhaHash
-  });
-
-  const usuario = await buscarUsuarioPorEmail(email);
-
-  if (!usuario) {
-    throw new Error("Não foi possível confirmar o cadastro.");
-  }
-
-  return {
-    id: usuario.id,
-    nome,
-    email,
-    token: gerarToken(usuario.id, email)
-  };
-}
-
-export async function autenticarUsuario(emailInformado: string, senha: string) {
-  const email = emailInformado.trim().toLowerCase();
-
-  if (!email || !senha || !validarEmail(email)) {
-    throw new Error("Informe um e-mail e uma senha válidos.");
-  }
-
-  const usuario = await buscarUsuarioPorEmail(email);
-
-  if (!usuario) {
-    throw new Error("E-mail ou senha incorretos.");
-  }
-
-  const senhaCorreta = await bcrypt.compare(senha, usuario.senha);
-
-  if (!senhaCorreta) {
-    throw new Error("E-mail ou senha incorretos.");
-  }
-
-  return {
-    id: usuario.id,
-    nome: usuario.nome,
-    email: usuario.email,
-    token: gerarToken(usuario.id, email)
-  };
 }
