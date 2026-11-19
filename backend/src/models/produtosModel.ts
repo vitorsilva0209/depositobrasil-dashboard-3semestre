@@ -102,7 +102,7 @@ export class Produto extends Entidade {
     this._estoque = valor;
   }
 
-  validar(): void {
+  override validar(): void {
     if (
       this._id !== undefined &&
       (!Number.isInteger(this._id) || this._id <= 0)
@@ -127,7 +127,7 @@ export class Produto extends Entidade {
     }
   }
 
-  obterTipo(): string {
+  override obterTipo(): string {
     return "Produto";
   }
 

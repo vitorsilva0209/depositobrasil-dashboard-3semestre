@@ -68,7 +68,7 @@ export class Funcionario extends Entidade {
     this._salario = valor;
   }
 
-  validar(): void {
+  override validar(): void {
     if (!this._nome.trim()) {
       throw new ErroValidacao("O nome do funcionário é obrigatório.");
     }
@@ -82,7 +82,7 @@ export class Funcionario extends Entidade {
     }
   }
 
-  obterTipo(): string {
+  override obterTipo(): string {
     return "Funcionário";
   }
 }

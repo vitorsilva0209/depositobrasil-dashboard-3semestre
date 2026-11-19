@@ -10,10 +10,9 @@ export const errorMiddleware: ErrorRequestHandler = (
   void _next;
 
   if (erro instanceof AppError) {
-    res.status(erro.statusCode).json({
+      res.status(erro.statusCode).json({
       sucesso: false,
       mensagem: erro.message,
-      detalhes: erro.detalhes,
     });
     return;
   }

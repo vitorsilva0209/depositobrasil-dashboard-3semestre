@@ -77,7 +77,7 @@ export class Cliente extends Entidade {
     this._telefone = valor.trim();
   }
 
-  validar(): void {
+  override validar(): void {
     if (!this._nome.trim()) {
       throw new ErroValidacao("O nome do cliente é obrigatório.");
     }
@@ -90,7 +90,7 @@ export class Cliente extends Entidade {
     }
   }
 
-  obterTipo(): string {
+  override obterTipo(): string {
     return "Cliente";
   }
 }

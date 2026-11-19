@@ -68,7 +68,7 @@ export class Venda extends Entidade {
     this._quantidade = valor;
   }
 
-  validar(): void {
+  override validar(): void {
     if (!Number.isInteger(this._produtoId) || this._produtoId <= 0) {
       throw new ErroValidacao("Selecione um produto válido.");
     }
@@ -87,7 +87,7 @@ export class Venda extends Entidade {
     }
   }
 
-  obterTipo(): string {
+  override obterTipo(): string {
     return "Venda";
   }
 }
