@@ -3,6 +3,7 @@ import { Router } from "express";
 import { autenticarToken } from "../middlewares/authMiddleware";
 import {
   listarProdutos,
+  listarOpcoesProdutos,
   buscarProduto,
   cadastrarProduto,
   atualizarProduto,
@@ -14,6 +15,7 @@ const router = Router();
 router.use(autenticarToken);
 
 router.get("/", listarProdutos);
+router.get("/opcoes", listarOpcoesProdutos);
 router.get("/:id", buscarProduto);
 router.post("/", cadastrarProduto);
 router.put("/:id", atualizarProduto);

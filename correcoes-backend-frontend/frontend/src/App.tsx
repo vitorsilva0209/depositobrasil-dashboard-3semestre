@@ -1,0 +1,1486 @@
+
+import { useEffect, useRef, useState, type FormEvent } from "react";
+import { AuthForms } from "./components/AuthForms";
+import { AuthProvider } from "./contexts/AuthContext";
+import { useAuth } from "./contexts/useAuth";
+import type { Usuario } from "./contexts/authContextCore";
+
+import {
+  validarEmail,
+  validarCPF,
+  validarSenhaForte,
+  formatarData,
+  formatarDataParaInput,
+} from "./utils/validacoes";
+
+import { API_URL, requisicaoAPI } from "./services/api";
+import "./App.css";
+
+const ITENS_POR_PAGINA = 5;
+
+type Tela = "login" | "cadastro" | "dashboard";
+
+type Modulo =
+  | "produtos"
+  | "clientes"
+  | "funcionarios"
+  | "vendas"
+  | "perfil";
+
+type Produto = {
+  id: number;
+  nome: string;
+  categoria: string;
+  preco: number | string;
+  descricao: string;
+  imagem_url: string;
+  estoque: number;
+};
+
+type Registro = {
+  id: number;
+  produto?: string;
+  produto_nome?: string;
+  produto_id?: number;
+  data_venda?: string;
+  [chave: string]: string | number | null | undefined;
+};
+
+type DadosFormulario = Record<string, string | number>;
+
+const formularios: Record<
+  Exclude<Modulo, "perfil">,
+  Record<string, string>
+> = {
+  produtos: {
+    nome: "",
+    categoria: "",
+    preco: "",
+    descricao: "",
+    imagem_url: "",
+    estoque: "",
+  },
+  clientes: {
+    nome: "",
+    email: "",
+    telefone: "",
+  },
+  funcionarios: {
+    nome: "",
+    cargo: "",
+    salario: "",
+  },
+  vendas: {
+    produto_id: "",
+    quantidade: "",
+    data_venda: "",
+  },
+};
+
+const rotas: Record<Exclude<Modulo, "perfil">, string> = {
+  produtos: "/api/produtos",
+  clientes: "/api/clientes",
+  funcionarios: "/api/funcionarios",
+  vendas: "/api/vendas",
+};
+
+function AppConteudo() {
+  const {
+    usuario,
+    token,
+    autenticado,
+    entrar,
+    atualizarUsuario,
+    sair: sairContexto,
+  } = useAuth();
+
+  const [tela, setTela] = useState<Tela>(
+    autenticado ? "dashboard" : "login"
+  );
+
+  const [modulo, setModulo] = useState<Modulo>("produtos");
+
+  // Estados de autenticação
+  const [nome, setNome] = useState("");
+  const [email, setEmail] = useState("");
+  const [senha, setSenha] = useState("");
+  const [confirmarSenhaCadastro, setConfirmarSenhaCadastro] =
+    useState("");
+  const [cpf, setCpf] = useState("");
+
+  // Estados dos CRUDs
+  const [produtos, setProdutos] = useState<Produto[]>([]);
+  const [opcoesProdutos, setOpcoesProdutos] = useState<Array<{ id: number; nome: string }>>([]);
+  const [totalProdutos, setTotalProdutos] = useState(0);
+  const [registros, setRegistros] = useState<Registro[]>([]);
+
+  // Estado do perfil
+  const [perfil, setPerfil] = useState<Usuario>({
+    id: 0,
+    nome: "",
+    email: "",
+    cpf: "",
+    usuario: "",
+  });
+
+  const [senhaAtual, setSenhaAtual] = useState("");
+  const [novaSenha, setNovaSenha] = useState("");
+  const [confirmarNovaSenha, setConfirmarNovaSenha] =
+    useState("");
+
+  // Estados gerais
+  const [formulario, setFormulario] = useState<
+    Record<string, string>
+  >({});
+
+  const [busca, setBusca] = useState("");
+  const [mensagem, setMensagem] = useState("");
+  const [carregando, setCarregando] = useState(false);
+
+  const [editandoId, setEditandoId] = useState<number | null>(
+    null
+  );
+
+  const [mostrarFormulario, setMostrarFormulario] =
+    useState(false);
+
+  const [paginaAtual, setPaginaAtual] = useState(1);
+  const [totalPaginas, setTotalPaginas] = useState(1);
+
+  // Controle de sessão expirada
+  useEffect(() => {
+    function tratarSessaoExpirada() {
+      sairContexto();
+
+      setProdutos([]);
+      setOpcoesProdutos([]);
+      setTotalProdutos(0);
+      setRegistros([]);
+      setTela("login");
+      setModulo("produtos");
+      setMostrarFormulario(false);
+      setEditandoId(null);
+      setFormulario({});
+      setBusca("");
+      setPaginaAtual(1);
+
+      setMensagem("Sua sessão expirou. Entre novamente.");
+
+      setSenha("");
+      setSenhaAtual("");
+      setNovaSenha("");
+      setConfirmarNovaSenha("");
+    }
+
+    window.addEventListener(
+      "sessao-expirada",
+      tratarSessaoExpirada
+    );
+
+    return () => {
+      window.removeEventListener(
+        "sessao-expirada",
+        tratarSessaoExpirada
+      );
+    };
+  }, [sairContexto]);
+
+  // Login
+  async function fazerLogin(e: FormEvent<HTMLFormElement>) {
+    e.preventDefault();
+    setMensagem("");
+
+    try {
+      if (!validarEmail(email)) {
+        throw new Error("Digite um e-mail válido.");
+      }
+
+      setCarregando(true);
+
+      const resultado = await requisicaoAPI(
+        "/api/auth/login",
+        "POST",
+        {
+          email: email.trim().toLowerCase(),
+          senha,
+        }
+      );
+
+      if (!resultado.token) {
+        throw new Error(
+          "A API não retornou o token de acesso."
+        );
+      }
+
+      const dadosUsuario = resultado.usuario || resultado.user;
+
+      if (
+        typeof dadosUsuario !== "object" ||
+        dadosUsuario === null ||
+        typeof dadosUsuario.id !== "number" ||
+        !Number.isSafeInteger(dadosUsuario.id) ||
+        dadosUsuario.id <= 0 ||
+        typeof dadosUsuario.nome !== "string" ||
+        typeof dadosUsuario.email !== "string"
+      ) {
+        throw new Error("A API retornou dados de usuário inválidos.");
+      }
+
+      entrar(resultado.token, dadosUsuario as Usuario);
+
+      setTela("dashboard");
+      setMensagem("Login realizado com sucesso!");
+      setSenha("");
+    } catch (erro) {
+      setMensagem(
+        erro instanceof Error
+          ? erro.message
+          : "Erro ao fazer login."
+      );
+    } finally {
+      setCarregando(false);
+    }
+  }
+
+  // Cadastro
+  async function fazerCadastro(e: FormEvent<HTMLFormElement>) {
+    e.preventDefault();
+    setMensagem("");
+
+    try {
+      if (!nome.trim()) {
+        throw new Error("Informe seu nome.");
+      }
+
+      if (!validarEmail(email)) {
+        throw new Error("Digite um e-mail válido.");
+      }
+
+      if (!validarCPF(cpf)) {
+        throw new Error("CPF inválido.");
+      }
+
+      if (!validarSenhaForte(senha)) {
+        throw new Error(
+          "A senha deve ter pelo menos 8 caracteres, letra maiúscula, minúscula, número e caractere especial."
+        );
+      }
+
+      if (senha !== confirmarSenhaCadastro) {
+        throw new Error("As senhas não coincidem.");
+      }
+
+      setCarregando(true);
+
+      const resultado = await requisicaoAPI(
+        "/api/auth/registrar",
+        "POST",
+        {
+          nome: nome.trim(),
+          email: email.trim().toLowerCase(),
+          senha,
+          confirmarSenha: confirmarSenhaCadastro,
+          cpf: cpf.replace(/\D/g, ""),
+        }
+      );
+
+      setMensagem(
+        resultado.mensagem ||
+          "Cadastro realizado com sucesso!"
+      );
+
+      setTela("login");
+      setNome("");
+      setCpf("");
+      setSenha("");
+      setConfirmarSenhaCadastro("");
+    } catch (erro) {
+      setMensagem(
+        erro instanceof Error
+          ? erro.message
+          : "Erro ao cadastrar."
+      );
+    } finally {
+      setCarregando(false);
+    }
+  }
+
+  // Carregar perfil
+  async function carregarPerfil() {
+    try {
+      const resultado = await requisicaoAPI(
+        "/api/usuarios/me",
+        "GET",
+        undefined,
+        token
+      );
+
+      const dados = resultado.usuario || resultado;
+
+      if (!Number.isSafeInteger(Number(dados.id)) || Number(dados.id) <= 0) {
+        throw new Error("A API retornou um perfil inválido.");
+      }
+
+      const usuarioAtualizado: Usuario = {
+        id: Number(dados.id),
+        nome: dados.nome || "",
+        email: dados.email || "",
+        cpf: dados.cpf || "",
+        usuario: dados.usuario || "",
+      };
+
+      setPerfil(usuarioAtualizado);
+      atualizarUsuario(usuarioAtualizado);
+    } catch (erro) {
+      setMensagem(
+        erro instanceof Error
+          ? erro.message
+          : "Erro ao carregar perfil."
+      );
+    }
+  }
+
+  // Evita que uma resposta antiga sobrescreva a busca mais recente.
+  const requisicaoModuloRef = useRef(0);
+
+  // Carregar os módulos
+  async function carregarModulo(
+    alvo: Modulo = modulo,
+    pagina = paginaAtual,
+    termoBusca = busca
+  ) {
+    const idRequisicao = ++requisicaoModuloRef.current;
+
+    if (alvo === "perfil") {
+      await carregarPerfil();
+      return;
+    }
+
+    try {
+      setCarregando(true);
+
+      const parametros = new URLSearchParams({
+        pagina: String(pagina),
+        limite: String(ITENS_POR_PAGINA),
+        busca: termoBusca,
+      });
+
+      const resultado = await requisicaoAPI(
+        `${rotas[alvo]}?${parametros.toString()}`,
+        "GET",
+        undefined,
+        token
+      );
+
+      if (idRequisicao !== requisicaoModuloRef.current) return;
+
+      const lista =
+        resultado[alvo] ||
+        resultado.registros ||
+        resultado.dados ||
+        [];
+
+      const dados = Array.isArray(lista) ? lista : [];
+
+      setRegistros(dados);
+
+      if (alvo === "vendas") {
+        const resultadoProdutos = await requisicaoAPI(
+          "/api/produtos/opcoes",
+          "GET",
+          undefined,
+          token
+        );
+        if (idRequisicao !== requisicaoModuloRef.current) return;
+        const listaProdutos = Array.isArray(resultadoProdutos.produtos)
+          ? resultadoProdutos.produtos
+          : [];
+        setOpcoesProdutos(
+          listaProdutos.filter(
+            (item: unknown): item is { id: number; nome: string } =>
+              typeof item === "object" &&
+              item !== null &&
+              "id" in item &&
+              "nome" in item &&
+              typeof item.id === "number" &&
+              typeof item.nome === "string"
+          )
+        );
+      }
+
+      if (alvo === "produtos") {
+        setProdutos(dados as Produto[]);
+
+        if (!termoBusca.trim()) {
+          setTotalProdutos(
+            Number(resultado.totalRegistros ?? dados.length)
+          );
+        }
+      }
+
+      const paginas = Number(
+        resultado.totalPaginas ||
+          resultado.paginas ||
+          resultado.total_pages ||
+          1
+      );
+
+      setTotalPaginas(Math.max(1, paginas));
+    } catch (erro) {
+      setMensagem(
+        erro instanceof Error
+          ? erro.message
+          : `Erro ao carregar ${alvo}.`
+      );
+    } finally {
+      if (idRequisicao === requisicaoModuloRef.current) {
+        setCarregando(false);
+      }
+    }
+  }
+
+  const carregarModuloRef = useRef(carregarModulo);
+
+  useEffect(() => {
+    carregarModuloRef.current = carregarModulo;
+  });
+
+  function limparCamposSenhaPerfil() {
+    setSenhaAtual("");
+    setNovaSenha("");
+    setConfirmarNovaSenha("");
+  }
+
+  // Navegação
+  function abrirModulo(alvo: Modulo) {
+    requisicaoModuloRef.current += 1;
+    setModulo(alvo);
+    setBusca("");
+    setMensagem("");
+    setEditandoId(null);
+    setMostrarFormulario(false);
+    setPaginaAtual(1);
+    limparCamposSenhaPerfil();
+
+    if (alvo === "perfil") {
+      void carregarPerfil();
+    }
+  }
+
+  // Novo registro
+  function abrirNovoRegistro() {
+    if (modulo === "perfil") return;
+
+    setFormulario({ ...formularios[modulo] });
+    setEditandoId(null);
+    setMostrarFormulario(true);
+    setMensagem("");
+  }
+
+  // Editar registro
+  function editarRegistro(registro: Registro) {
+    if (modulo === "perfil") return;
+
+    const valores: Record<string, string> = {};
+
+    Object.keys(formularios[modulo]).forEach((campo) => {
+      if (campo === "data_venda") {
+        valores[campo] = formatarDataParaInput(
+          registro[campo] as string | undefined
+        );
+      } else {
+        valores[campo] = String(registro[campo] ?? "");
+      }
+    });
+
+    setFormulario(valores);
+    setEditandoId(registro.id);
+    setMostrarFormulario(true);
+    setMensagem("");
+  }
+
+  // Salvar registro
+  async function salvarRegistro(e: FormEvent<HTMLFormElement>) {
+    e.preventDefault();
+    setMensagem("");
+
+    if (modulo === "perfil") return;
+
+    try {
+      setCarregando(true);
+
+      const dados: DadosFormulario = { ...formulario };
+
+      if (modulo === "produtos") {
+        if (!String(dados.nome || "").trim()) {
+          throw new Error("Informe o nome do produto.");
+        }
+
+        if (
+          Number(dados.preco) < 0 ||
+          Number(dados.estoque) < 0
+        ) {
+          throw new Error(
+            "Preço e estoque não podem ser negativos."
+          );
+        }
+
+        dados.preco = Number(dados.preco);
+        dados.estoque = Number(dados.estoque);
+      }
+
+      if (modulo === "clientes") {
+        if (!String(dados.nome || "").trim()) {
+          throw new Error("Informe o nome do cliente.");
+        }
+
+        if (
+          dados.email &&
+          !validarEmail(String(dados.email))
+        ) {
+          throw new Error(
+            "Digite um e-mail válido para o cliente."
+          );
+        }
+      }
+
+      if (modulo === "funcionarios") {
+        if (!String(dados.nome || "").trim()) {
+          throw new Error("Informe o nome do funcionário.");
+        }
+
+        if (Number(dados.salario) < 0) {
+          throw new Error(
+            "O salário não pode ser negativo."
+          );
+        }
+
+        dados.salario = Number(dados.salario);
+      }
+
+      if (modulo === "vendas") {
+        if (
+          !dados.produto_id ||
+          Number(dados.produto_id) <= 0
+        ) {
+          throw new Error("Selecione um produto.");
+        }
+
+        if (Number(dados.quantidade) <= 0) {
+          throw new Error(
+            "A quantidade deve ser maior que zero."
+          );
+        }
+
+        dados.produto_id = Number(dados.produto_id);
+        dados.quantidade = Number(dados.quantidade);
+      }
+
+      const rota = rotas[modulo];
+
+      const resultado = await requisicaoAPI(
+        editandoId
+          ? `${rota}/${editandoId}`
+          : rota,
+        editandoId ? "PUT" : "POST",
+        dados,
+        token
+      );
+
+      setMensagem(
+        resultado.mensagem ||
+          (editandoId
+            ? "Registro atualizado com sucesso!"
+            : "Registro cadastrado com sucesso!")
+      );
+
+      setMostrarFormulario(false);
+      setEditandoId(null);
+      setFormulario({});
+      setBusca("");
+      setPaginaAtual(1);
+
+      await carregarModulo(modulo, 1, "");
+    } catch (erro) {
+      setMensagem(
+        erro instanceof Error
+          ? erro.message
+          : "Erro ao salvar registro."
+      );
+    } finally {
+      setCarregando(false);
+    }
+  }
+
+  // Excluir registro
+  async function excluirRegistro(id: number) {
+    if (
+      !window.confirm(
+        "Tem certeza que deseja excluir este registro?"
+      )
+    ) {
+      return;
+    }
+
+    if (modulo === "perfil") return;
+
+    try {
+      setCarregando(true);
+
+      const resultado = await requisicaoAPI(
+        `${rotas[modulo]}/${id}`,
+        "DELETE",
+        undefined,
+        token
+      );
+
+      setMensagem(
+        resultado.mensagem ||
+          "Registro excluído com sucesso!"
+      );
+
+      const paginaDestino =
+        registros.length === 1 && paginaAtual > 1
+          ? paginaAtual - 1
+          : paginaAtual;
+
+      setPaginaAtual(paginaDestino);
+
+      await carregarModulo(
+        modulo,
+        paginaDestino,
+        busca
+      );
+    } catch (erro) {
+      setMensagem(
+        erro instanceof Error
+          ? erro.message
+          : "Erro ao excluir registro."
+      );
+    } finally {
+      setCarregando(false);
+    }
+  }
+
+  // Salvar perfil
+  async function salvarPerfil(e: FormEvent<HTMLFormElement>) {
+    e.preventDefault();
+    setMensagem("");
+
+    try {
+      const nomeAtualizado = perfil.nome?.trim() || "";
+      const cpfAtualizado = perfil.cpf || "";
+
+      if (!nomeAtualizado) {
+        throw new Error("Informe seu nome.");
+      }
+
+      if (!validarCPF(cpfAtualizado)) {
+        throw new Error("CPF inválido.");
+      }
+
+      const camposSenha = [
+        senhaAtual,
+        novaSenha,
+        confirmarNovaSenha,
+      ];
+
+      const desejaAlterarSenha = camposSenha.some(
+        (campo) => campo.length > 0
+      );
+
+      const dados: Record<string, string> = {
+        nome: nomeAtualizado,
+        cpf: cpfAtualizado.replace(/\D/g, ""),
+        usuario: perfil.usuario || "",
+      };
+
+      if (desejaAlterarSenha) {
+        if (
+          !senhaAtual ||
+          !novaSenha ||
+          !confirmarNovaSenha
+        ) {
+          throw new Error(
+            "Para alterar sua senha, preencha a senha atual, a nova senha e a confirmação."
+          );
+        }
+
+        if (!validarSenhaForte(novaSenha)) {
+          throw new Error(
+            "A nova senha deve ter pelo menos 8 caracteres, letra maiúscula, minúscula, número e caractere especial."
+          );
+        }
+
+        if (novaSenha !== confirmarNovaSenha) {
+          throw new Error(
+            "A confirmação da nova senha não coincide."
+          );
+        }
+
+        if (novaSenha === senhaAtual) {
+          throw new Error(
+            "A nova senha deve ser diferente da senha atual."
+          );
+        }
+
+        dados.senhaAtual = senhaAtual;
+        dados.novaSenha = novaSenha;
+        dados.confirmarSenha = confirmarNovaSenha;
+      }
+
+      setCarregando(true);
+
+      const resultado = await requisicaoAPI(
+        "/api/usuarios/me",
+        "PUT",
+        dados,
+        token
+      );
+
+      const dadosRetornados = resultado.usuario || {};
+
+      const usuarioAtualizado: Usuario = {
+        ...perfil,
+        ...dadosRetornados,
+        nome: dadosRetornados.nome || nomeAtualizado,
+        cpf: dadosRetornados.cpf || dados.cpf,
+        usuario:
+          dadosRetornados.usuario === null
+            ? ""
+            : dadosRetornados.usuario ?? perfil.usuario ?? "",
+        email: perfil.email,
+      };
+
+      setPerfil(usuarioAtualizado);
+      atualizarUsuario(usuarioAtualizado);
+
+      limparCamposSenhaPerfil();
+
+      setMensagem(
+        resultado.mensagem ||
+          "Perfil atualizado com sucesso!"
+      );
+    } catch (erro) {
+      setMensagem(
+        erro instanceof Error
+          ? erro.message
+          : "Erro ao atualizar perfil."
+      );
+    } finally {
+      setCarregando(false);
+    }
+  }
+
+  // Sair do sistema
+  function sair() {
+    sairContexto();
+
+    setProdutos([]);
+    setOpcoesProdutos([]);
+    setTotalProdutos(0);
+    setRegistros([]);
+    setEmail("");
+    setSenha("");
+    setNome("");
+    setCpf("");
+    setConfirmarSenhaCadastro("");
+
+    limparCamposSenhaPerfil();
+
+    setMensagem("");
+    setModulo("produtos");
+    setMostrarFormulario(false);
+    setEditandoId(null);
+    setFormulario({});
+    setBusca("");
+    setPaginaAtual(1);
+    setTela("login");
+  }
+
+  // Pesquisa e paginação
+  useEffect(() => {
+    if (
+      tela !== "dashboard" ||
+      !token ||
+      modulo === "perfil"
+    ) {
+      return;
+    }
+
+    const temporizador = window.setTimeout(() => {
+      void carregarModuloRef.current(modulo);
+    }, 250);
+
+    return () => {
+      window.clearTimeout(temporizador);
+    };
+  }, [tela, token, modulo, paginaAtual, busca]);
+
+  // A API já aplica a busca antes da paginação. Não filtrar novamente
+  // apenas a página atual evita esconder resultados (ex.: descrição de produto).
+  const produtosFiltrados = produtos;
+  const registrosFiltrados = registros;
+
+  const titulos: Record<Modulo, string> = {
+    produtos: "Produtos",
+    clientes: "Clientes",
+    funcionarios: "Funcionários",
+    vendas: "Vendas",
+    perfil: "Meu perfil",
+  };
+
+  // Campos dinâmicos dos formulários
+  function campoFormulario(campo: string) {
+    const nomes: Record<string, string> = {
+      nome: "Nome",
+      categoria: "Categoria",
+      preco: "Preço",
+      descricao: "Descrição",
+      imagem_url: "Caminho da imagem",
+      estoque: "Estoque",
+      email: "E-mail",
+      telefone: "Telefone",
+      cargo: "Cargo",
+      salario: "Salário",
+      produto_id: "Produto",
+      quantidade: "Quantidade",
+      data_venda: "Data da venda",
+    };
+
+    if (campo === "produto_id") {
+      return (
+        <label key={campo}>
+          {nomes[campo]}
+
+          <select
+            value={formulario[campo] || ""}
+            onChange={(e) =>
+              setFormulario({
+                ...formulario,
+                [campo]: e.target.value,
+              })
+            }
+            required
+          >
+            <option value="">Selecione um produto</option>
+
+            {opcoesProdutos.map((produto) => (
+              <option key={produto.id} value={produto.id}>
+                {produto.nome}
+              </option>
+            ))}
+          </select>
+        </label>
+      );
+    }
+
+    if (campo === "descricao") {
+      return (
+        <label key={campo}>
+          {nomes[campo]}
+
+          <textarea
+            value={formulario[campo] || ""}
+            onChange={(e) =>
+              setFormulario({
+                ...formulario,
+                [campo]: e.target.value,
+              })
+            }
+          />
+        </label>
+      );
+    }
+
+    return (
+      <label key={campo}>
+        {nomes[campo] || campo}
+
+        <input
+          type={
+            campo === "preco" || campo === "salario"
+              ? "number"
+              : campo === "estoque" ||
+                  campo === "quantidade"
+                ? "number"
+                : campo === "data_venda"
+                  ? "datetime-local"
+                  : campo === "email"
+                    ? "email"
+                    : "text"
+          }
+          min={
+            [
+              "preco",
+              "salario",
+              "estoque",
+              "quantidade",
+            ].includes(campo)
+              ? "0"
+              : undefined
+          }
+          step={
+            ["preco", "salario"].includes(campo)
+              ? "0.01"
+              : undefined
+          }
+          value={formulario[campo] || ""}
+          onChange={(e) =>
+            setFormulario({
+              ...formulario,
+              [campo]: e.target.value,
+            })
+          }
+          required={
+            campo !== "descricao" &&
+            campo !== "imagem_url"
+          }
+        />
+      </label>
+    );
+  }
+
+  // Interface
+  return (
+    <main className="app">
+      <section className="painel">
+        <header className="cabecalho">
+          <div className="marca">
+            <h1>DEPÓSITO BRASIL</h1>
+            <p>Materiais de Construção</p>
+          </div>
+
+          <span className="status-online">
+            Sistema online
+          </span>
+        </header>
+
+        <div className="conteudo">
+          {mensagem && (
+            <div className="mensagem">
+              {mensagem}
+            </div>
+          )}
+
+          {/* Login e cadastro ficam no componente AuthForms */}
+          <AuthForms
+            tela={tela}
+            carregando={carregando}
+            email={email}
+            setEmail={setEmail}
+            senha={senha}
+            setSenha={setSenha}
+            nome={nome}
+            setNome={setNome}
+            cpf={cpf}
+            setCpf={setCpf}
+            confirmarSenhaCadastro={confirmarSenhaCadastro}
+            setConfirmarSenhaCadastro={setConfirmarSenhaCadastro}
+            fazerLogin={fazerLogin}
+            fazerCadastro={fazerCadastro}
+            abrirCadastro={() => {
+              setMensagem("");
+              setTela("cadastro");
+            }}
+            voltarLogin={() => {
+              setMensagem("");
+              setTela("login");
+            }}
+          />
+
+          {/* Dashboard */}
+          {tela === "dashboard" && (
+            <div className="dashboard">
+              <div className="dashboard-topo">
+                <div>
+                  <h2>Dashboard</h2>
+                  <p>
+                    Bem-vindo(a), {usuario?.nome || "usuário"}!
+                  </p>
+                </div>
+
+                <button
+                  className="botao-sair"
+                  onClick={sair}
+                >
+                  Sair
+                </button>
+              </div>
+
+              {/* Resumo */}
+              <div className="resumo">
+                <div className="resumo-card">
+                  <h3>{totalProdutos}</h3>
+                  <p>Produtos cadastrados</p>
+                </div>
+
+                <div className="resumo-card">
+                  <h3>Depósito Brasil</h3>
+                  <p>Materiais de construção</p>
+                </div>
+              </div>
+
+              {/* Menu dos módulos */}
+              <nav className="menu-crud">
+                {(
+                  [
+                    "produtos",
+                    "clientes",
+                    "funcionarios",
+                    "vendas",
+                    "perfil",
+                  ] as Modulo[]
+                ).map((item) => (
+                  <button
+                    key={item}
+                    type="button"
+                    className={
+                      modulo === item ? "menu-ativo" : ""
+                    }
+                    onClick={() => abrirModulo(item)}
+                  >
+                    {titulos[item]}
+                  </button>
+                ))}
+              </nav>
+
+              <div className="produtos-topo">
+                <h2>{titulos[modulo]}</h2>
+
+                {modulo !== "perfil" && (
+                  <>
+                    <button
+                      className="botao-atualizar"
+                      type="button"
+                      onClick={() =>
+                        void carregarModulo(modulo)
+                      }
+                    >
+                      Atualizar
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={abrirNovoRegistro}
+                    >
+                      Novo cadastro
+                    </button>
+                  </>
+                )}
+              </div>
+
+              {/* Perfil */}
+              {modulo === "perfil" && (
+                <form onSubmit={salvarPerfil}>
+                  <h3>Editar meus dados</h3>
+
+                  <label>Nome</label>
+                  <input
+                    value={perfil.nome || ""}
+                    onChange={(e) =>
+                      setPerfil({
+                        ...perfil,
+                        nome: e.target.value,
+                      })
+                    }
+                    required
+                  />
+
+                  <label>
+                    E-mail (não pode ser alterado)
+                  </label>
+                  <input
+                    type="email"
+                    value={perfil.email || ""}
+                    disabled
+                  />
+
+                  <label>CPF</label>
+                  <input
+                    value={perfil.cpf || ""}
+                    onChange={(e) =>
+                      setPerfil({
+                        ...perfil,
+                        cpf: e.target.value,
+                      })
+                    }
+                    maxLength={14}
+                    placeholder="000.000.000-00"
+                    required
+                  />
+
+                  <label>Usuário</label>
+                  <input
+                    value={perfil.usuario || ""}
+                    onChange={(e) =>
+                      setPerfil({
+                        ...perfil,
+                        usuario: e.target.value,
+                      })
+                    }
+                  />
+
+                  <h3>Alterar senha</h3>
+
+                  <p>
+                    Se não quiser alterar sua senha, deixe os
+                    três campos abaixo vazios.
+                  </p>
+
+                  <label>Senha atual</label>
+                  <input
+                    type="password"
+                    name="senha-atual-perfil"
+                    autoComplete="current-password"
+                    value={senhaAtual}
+                    onChange={(e) =>
+                      setSenhaAtual(e.target.value)
+                    }
+                    placeholder="Digite sua senha atual"
+                  />
+
+                  <label>Nova senha</label>
+                  <input
+                    type="password"
+                    name="nova-senha-perfil"
+                    autoComplete="new-password"
+                    value={novaSenha}
+                    onChange={(e) =>
+                      setNovaSenha(e.target.value)
+                    }
+                    placeholder="Digite sua nova senha"
+                  />
+
+                  <label>Confirmar nova senha</label>
+                  <input
+                    type="password"
+                    name="confirmar-nova-senha-perfil"
+                    autoComplete="new-password"
+                    value={confirmarNovaSenha}
+                    onChange={(e) =>
+                      setConfirmarNovaSenha(e.target.value)
+                    }
+                    placeholder="Repita sua nova senha"
+                  />
+
+                  <p>
+                    A senha deve ter no mínimo 8 caracteres,
+                    incluindo maiúscula, minúscula, número e
+                    caractere especial.
+                  </p>
+
+                  <button
+                    type="submit"
+                    disabled={carregando}
+                  >
+                    {carregando
+                      ? "Salvando..."
+                      : "Salvar perfil"}
+                  </button>
+                </form>
+              )}
+
+              {/* CRUDs */}
+              {modulo !== "perfil" && (
+                <>
+                  {mostrarFormulario && (
+                    <form
+                      onSubmit={salvarRegistro}
+                      className="formulario-crud"
+                    >
+                      <h3>
+                        {editandoId
+                          ? `Editar ${titulos[modulo]}`
+                          : `Cadastrar ${titulos[modulo]}`}
+                      </h3>
+
+                      {Object.keys(formularios[modulo]).map(
+                        (campo) => campoFormulario(campo)
+                      )}
+
+                      <div className="acoes-formulario">
+                        <button
+                          type="submit"
+                          disabled={carregando}
+                        >
+                          {carregando
+                            ? "Salvando..."
+                            : editandoId
+                              ? "Atualizar"
+                              : "Cadastrar"}
+                        </button>
+
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setMostrarFormulario(false);
+                            setEditandoId(null);
+                            setFormulario({});
+                          }}
+                        >
+                          Cancelar
+                        </button>
+                      </div>
+                    </form>
+                  )}
+
+                  {/* Pesquisa */}
+                  <div className="pesquisa">
+                    <input
+                      type="search"
+                      placeholder={`Pesquisar ${titulos[
+                        modulo
+                      ].toLowerCase()}...`}
+                      value={busca}
+                      onChange={(e) => {
+                        setBusca(e.target.value);
+                        setPaginaAtual(1);
+                      }}
+                    />
+                  </div>
+
+                  {carregando && (
+                    <p className="carregando">
+                      Carregando registros...
+                    </p>
+                  )}
+
+                  {/* Produtos */}
+                  {!carregando && modulo === "produtos" && (
+                    <div className="lista-produtos">
+                      {produtosFiltrados.length === 0 ? (
+                        <p className="estado-lista">
+                          Nenhum produto encontrado.
+                        </p>
+                      ) : (
+                        produtosFiltrados.map((produto) => (
+                          <article
+                            className="produto-card"
+                            key={produto.id}
+                          >
+                            {produto.imagem_url && (
+                              <div className="produto-imagem">
+                                <img
+                                  src={
+                                    produto.imagem_url.startsWith("http")
+                                      ? produto.imagem_url
+                                      : `${API_URL}/${produto.imagem_url.replace(/^\/+/, "")}`
+                                  }
+                                  alt={produto.nome}
+                                  onError={(e) => {
+                                    e.currentTarget.style.display = "none";
+                                  }}
+                                />
+                              </div>
+                            )}
+
+                            <div className="produto-info">
+                              <h3>{produto.nome}</h3>
+
+                              <p className="produto-categoria">
+                                {produto.categoria}
+                              </p>
+
+                              <p className="produto-descricao">
+                                {produto.descricao}
+                              </p>
+
+                              <div className="produto-dados">
+                                <strong>
+                                  {Number(
+                                    produto.preco
+                                  ).toLocaleString("pt-BR", {
+                                    style: "currency",
+                                    currency: "BRL",
+                                  })}
+                                </strong>
+
+                                <span>
+                                  Estoque: {produto.estoque}
+                                </span>
+                              </div>
+
+                              <div className="produto-acoes">
+                                <button
+                                  type="button"
+                                  onClick={() =>
+                                    editarRegistro(produto)
+                                  }
+                                >
+                                  Editar
+                                </button>
+
+                                <button
+                                  type="button"
+                                  onClick={() =>
+                                    void excluirRegistro(produto.id)
+                                  }
+                                >
+                                  Excluir
+                                </button>
+                              </div>
+                            </div>
+                          </article>
+                        ))
+                      )}
+                    </div>
+                  )}
+
+                  {/* Clientes, funcionários e vendas */}
+                  {!carregando && modulo !== "produtos" && (
+                    <div className="tabela-container">
+                      {registrosFiltrados.length === 0 ? (
+                        <p className="estado-lista">
+                          Nenhum registro encontrado.
+                        </p>
+                      ) : (
+                        <table>
+                          <thead>
+                            <tr>
+                              <th>ID</th>
+
+                              {Object.keys(
+                                formularios[modulo]
+                              ).map((campo) => (
+                                <th key={campo}>
+                                  {campo === "produto_id" ||
+                                  campo === "produto_nome"
+                                    ? "Produto"
+                                    : campo === "data_venda"
+                                      ? "Data da venda"
+                                      : campo.charAt(0).toUpperCase() +
+                                        campo.slice(1)}
+                                </th>
+                              ))}
+
+                              <th>Ações</th>
+                            </tr>
+                          </thead>
+
+                          <tbody>
+                            {registrosFiltrados.map((registro) => (
+                              <tr key={registro.id}>
+                                <td>{registro.id}</td>
+
+                                {Object.keys(
+                                  formularios[modulo]
+                                ).map((campo) => {
+                                  let valor = registro[campo];
+
+                                  if (campo === "produto_id") {
+                                    valor = registro.produto ?? registro.produto_nome ?? registro.produto_id ?? "";
+                                  }
+
+                                  if (
+                                    campo === "data_venda" &&
+                                    typeof valor === "string"
+                                  ) {
+                                    valor = formatarData(valor);
+                                  }
+
+                                  if (
+                                    campo === "preco" ||
+                                    campo === "salario"
+                                  ) {
+                                    valor = Number(
+                                      valor || 0
+                                    ).toLocaleString("pt-BR", {
+                                      style: "currency",
+                                      currency: "BRL",
+                                    });
+                                  }
+
+                                  return (
+                                    <td key={campo}>
+                                      {String(valor ?? "-")}
+                                    </td>
+                                  );
+                                })}
+
+                                <td>
+                                  <div className="acoes-registro">
+                                    <button
+                                      type="button"
+                                      onClick={() =>
+                                        editarRegistro(registro)
+                                      }
+                                    >
+                                      Editar
+                                    </button>
+
+                                    <button
+                                      type="button"
+                                      onClick={() =>
+                                        void excluirRegistro(registro.id)
+                                      }
+                                    >
+                                      Excluir
+                                    </button>
+                                  </div>
+                                </td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      )}
+                    </div>
+                  )}
+
+                  {/* Paginação */}
+                  {!carregando && totalPaginas > 1 && (
+                    <div className="paginacao">
+                      <button
+                        type="button"
+                        disabled={paginaAtual <= 1}
+                        onClick={() =>
+                          setPaginaAtual((pagina) =>
+                            Math.max(1, pagina - 1)
+                          )
+                        }
+                      >
+                        Anterior
+                      </button>
+
+                      <span>
+                        Página {paginaAtual} de {totalPaginas}
+                      </span>
+
+                      <button
+                        type="button"
+                        disabled={
+                          paginaAtual >= totalPaginas
+                        }
+                        onClick={() =>
+                          setPaginaAtual((pagina) =>
+                            Math.min(
+                              totalPaginas,
+                              pagina + 1
+                            )
+                          )
+                        }
+                      >
+                        Próxima
+                      </button>
+                    </div>
+                  )}
+                </>
+              )}
+            </div>
+          )}
+        </div>
+      </section>
+    </main>
+  );
+}
+
+// Componente principal
+function App() {
+  return (
+    <AuthProvider>
+      <AppConteudo />
+    </AuthProvider>
+  );
+}
+
+export default App;

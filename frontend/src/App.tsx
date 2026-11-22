@@ -110,11 +110,13 @@ function AppConteudo() {
 
   // Estados dos CRUDs
   const [produtos, setProdutos] = useState<Produto[]>([]);
+  const [opcoesProdutos, setOpcoesProdutos] = useState<Array<{ id: number; nome: string }>>([]);
   const [totalProdutos, setTotalProdutos] = useState(0);
   const [registros, setRegistros] = useState<Registro[]>([]);
 
   // Estado do perfil
   const [perfil, setPerfil] = useState<Usuario>({
+    id: 0,
     nome: "",
     email: "",
     cpf: "",
@@ -151,6 +153,7 @@ function AppConteudo() {
       sairContexto();
 
       setProdutos([]);
+      setOpcoesProdutos([]);
       setTotalProdutos(0);
       setRegistros([]);
       setTela("login");
@@ -209,10 +212,21 @@ function AppConteudo() {
         );
       }
 
-      const dadosUsuario: Usuario =
-        resultado.usuario || resultado.user || {};
+      const dadosUsuario = resultado.usuario || resultado.user;
 
-      entrar(resultado.token, dadosUsuario);
+      if (
+        typeof dadosUsuario !== "object" ||
+        dadosUsuario === null ||
+        typeof dadosUsuario.id !== "number" ||
+        !Number.isSafeInteger(dadosUsuario.id) ||
+        dadosUsuario.id <= 0 ||
+        typeof dadosUsuario.nome !== "string" ||
+        typeof dadosUsuario.email !== "string"
+      ) {
+        throw new Error("A API retornou dados de usuário inválidos.");
+      }
+
+      entrar(resultado.token, dadosUsuario as Usuario);
 
       setTela("dashboard");
       setMensagem("Login realizado com sucesso!");
@@ -303,8 +317,12 @@ function AppConteudo() {
 
       const dados = resultado.usuario || resultado;
 
+      if (!Number.isSafeInteger(Number(dados.id)) || Number(dados.id) <= 0) {
+        throw new Error("A API retornou um perfil inválido.");
+      }
+
       const usuarioAtualizado: Usuario = {
-        id: dados.id,
+        id: Number(dados.id),
         nome: dados.nome || "",
         email: dados.email || "",
         cpf: dados.cpf || "",
@@ -322,12 +340,17 @@ function AppConteudo() {
     }
   }
 
+  // Evita que uma resposta antiga sobrescreva a busca mais recente.
+  const requisicaoModuloRef = useRef(0);
+
   // Carregar os módulos
   async function carregarModulo(
     alvo: Modulo = modulo,
     pagina = paginaAtual,
     termoBusca = busca
   ) {
+    const idRequisicao = ++requisicaoModuloRef.current;
+
     if (alvo === "perfil") {
       await carregarPerfil();
       return;
@@ -349,6 +372,8 @@ function AppConteudo() {
         token
       );
 
+      if (idRequisicao !== requisicaoModuloRef.current) return;
+
       const lista =
         resultado[alvo] ||
         resultado.registros ||
@@ -358,6 +383,30 @@ function AppConteudo() {
       const dados = Array.isArray(lista) ? lista : [];
 
       setRegistros(dados);
+
+      if (alvo === "vendas") {
+        const resultadoProdutos = await requisicaoAPI(
+          "/api/produtos/opcoes",
+          "GET",
+          undefined,
+          token
+        );
+        if (idRequisicao !== requisicaoModuloRef.current) return;
+        const listaProdutos = Array.isArray(resultadoProdutos.produtos)
+          ? resultadoProdutos.produtos
+          : [];
+        setOpcoesProdutos(
+          listaProdutos.filter(
+            (item: unknown): item is { id: number; nome: string } =>
+              typeof item === "object" &&
+              item !== null &&
+              "id" in item &&
+              "nome" in item &&
+              typeof item.id === "number" &&
+              typeof item.nome === "string"
+          )
+        );
+      }
 
       if (alvo === "produtos") {
         setProdutos(dados as Produto[]);
@@ -384,7 +433,9 @@ function AppConteudo() {
           : `Erro ao carregar ${alvo}.`
       );
     } finally {
-      setCarregando(false);
+      if (idRequisicao === requisicaoModuloRef.current) {
+        setCarregando(false);
+      }
     }
   }
 
@@ -402,6 +453,7 @@ function AppConteudo() {
 
   // Navegação
   function abrirModulo(alvo: Modulo) {
+    requisicaoModuloRef.current += 1;
     setModulo(alvo);
     setBusca("");
     setMensagem("");
@@ -694,7 +746,9 @@ function AppConteudo() {
         nome: dadosRetornados.nome || nomeAtualizado,
         cpf: dadosRetornados.cpf || dados.cpf,
         usuario:
-          dadosRetornados.usuario || perfil.usuario || "",
+          dadosRetornados.usuario === null
+            ? ""
+            : dadosRetornados.usuario ?? perfil.usuario ?? "",
         email: perfil.email,
       };
 
@@ -723,6 +777,7 @@ function AppConteudo() {
     sairContexto();
 
     setProdutos([]);
+    setOpcoesProdutos([]);
     setTotalProdutos(0);
     setRegistros([]);
     setEmail("");
@@ -762,19 +817,10 @@ function AppConteudo() {
     };
   }, [tela, token, modulo, paginaAtual, busca]);
 
-  const produtosFiltrados = produtos.filter((produto) =>
-    `${produto.nome} ${produto.categoria}`
-      .toLowerCase()
-      .includes(busca.toLowerCase())
-  );
-
-  const registrosFiltrados = registros.filter((registro) =>
-    Object.values(registro)
-      .map((valor) => String(valor ?? ""))
-      .join(" ")
-      .toLowerCase()
-      .includes(busca.toLowerCase())
-  );
+  // A API já aplica a busca antes da paginação. Não filtrar novamente
+  // apenas a página atual evita esconder resultados (ex.: descrição de produto).
+  const produtosFiltrados = produtos;
+  const registrosFiltrados = registros;
 
   const titulos: Record<Modulo, string> = {
     produtos: "Produtos",
@@ -819,7 +865,7 @@ function AppConteudo() {
           >
             <option value="">Selecione um produto</option>
 
-            {produtos.map((produto) => (
+            {opcoesProdutos.map((produto) => (
               <option key={produto.id} value={produto.id}>
                 {produto.nome}
               </option>
@@ -1322,11 +1368,8 @@ function AppConteudo() {
                                 ).map((campo) => {
                                   let valor = registro[campo];
 
-                                  if (
-                                    campo === "produto_id" &&
-                                    registro.produto_nome
-                                  ) {
-                                    valor = registro.produto_nome;
+                                  if (campo === "produto_id") {
+                                    valor = registro.produto ?? registro.produto_nome ?? registro.produto_id ?? "";
                                   }
 
                                   if (

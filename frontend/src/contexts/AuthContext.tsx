@@ -47,7 +47,14 @@ function recuperarSessao(): SessaoInicial {
       typeof dadosUsuario !== "object" ||
       dadosUsuario === null ||
       Array.isArray(dadosUsuario) ||
-      !("id" in dadosUsuario)
+      !("id" in dadosUsuario) ||
+      typeof dadosUsuario.id !== "number" ||
+      !Number.isSafeInteger(dadosUsuario.id) ||
+      dadosUsuario.id <= 0 ||
+      !("nome" in dadosUsuario) ||
+      typeof dadosUsuario.nome !== "string" ||
+      !("email" in dadosUsuario) ||
+      typeof dadosUsuario.email !== "string"
     ) {
       throw new Error("Dados de usuário inválidos.");
     }
@@ -105,19 +112,19 @@ export function AuthProvider({ children }: AuthProviderProps) {
    * Atualiza os dados do usuário no estado e no navegador.
    */
   const atualizarUsuario = useCallback(
-  (dadosUsuario: Partial<Usuario>) => {
-    if (!usuario) return;
+    (dadosUsuario: Partial<Usuario>) => {
+      if (!usuario) return;
 
-    const atualizado: Usuario = {
-      ...usuario,
-      ...dadosUsuario,
-    };
+      const atualizado: Usuario = {
+        ...usuario,
+        ...dadosUsuario,
+      };
 
-    localStorage.setItem("usuario", JSON.stringify(atualizado));
-    setUsuario(atualizado);
-  },
-  [usuario]
-);
+      localStorage.setItem("usuario", JSON.stringify(atualizado));
+      setUsuario(atualizado);
+    },
+    [usuario]
+  );
 
   /**
    * Encerra a sessão e remove os dados armazenados.
@@ -133,16 +140,16 @@ export function AuthProvider({ children }: AuthProviderProps) {
   const autenticado = Boolean(token && usuario);
 
   useEffect(() => {
-  function sincronizarAbas(event: StorageEvent) {
-    if (event.key === "token" || event.key === "usuario") {
-      const novaSessao = recuperarSessao();
-      setToken(novaSessao.token);
-      setUsuario(novaSessao.usuario);
+    function sincronizarAbas(event: StorageEvent) {
+      if (event.key === "token" || event.key === "usuario" || event.key === null) {
+        const novaSessao = recuperarSessao();
+        setToken(novaSessao.token);
+        setUsuario(novaSessao.usuario);
+      }
     }
-  }
 
-  window.addEventListener("storage", sincronizarAbas);
-  return () => window.removeEventListener("storage", sincronizarAbas);
+    window.addEventListener("storage", sincronizarAbas);
+    return () => window.removeEventListener("storage", sincronizarAbas);
   }, []);
 
   const valor = useMemo(

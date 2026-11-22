@@ -83,7 +83,7 @@ export class VendaService {
   }
 
   private validarId(id: number): void {
-    if (!Number.isInteger(id) || id <= 0) {
+    if (!Number.isSafeInteger(id) || id <= 0) {
       throw new ErroValidacao("ID da venda inválido.");
     }
   }

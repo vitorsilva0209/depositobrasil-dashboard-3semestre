@@ -4,12 +4,18 @@
 import { Request, Response, NextFunction } from "express";
 import { Cliente } from "../models/clienteModel";
 import { clienteService as service } from "../config/dependencies";
+import { normalizarPaginacao } from "../utils/paginacao";
 
 export async function listarClientes(req: Request, res: Response, next: NextFunction) {
   try {
-    const pagina = Math.max(1, Number(req.query.pagina) || 1);
-    const limite = Math.min(100, Math.max(1, Number(req.query.limite) || 10));
-    const busca = String(req.query.busca || "").trim();
+    const { pagina, limite } = normalizarPaginacao(
+      req.query.pagina,
+      req.query.limite,
+      10
+    );
+    const busca = typeof req.query.busca === "string"
+      ? req.query.busca.trim()
+      : "";
 
     const resultado = await service.listarPaginado({ pagina, limite, busca });
 
@@ -37,7 +43,7 @@ export async function buscarCliente(req: Request, res: Response, next: NextFunct
 
 export async function cadastrarCliente(req: Request, res: Response, next: NextFunction) {
   try {
-    const { nome, email, telefone } = req.body;
+    const { nome, email, telefone } = req.body ?? {};
 
     const cliente = new Cliente(nome, email ?? "", telefone ?? "");
     const id = await service.cadastrar(cliente);
@@ -54,7 +60,7 @@ export async function cadastrarCliente(req: Request, res: Response, next: NextFu
 
 export async function atualizarCliente(req: Request, res: Response, next: NextFunction) {
   try {
-    const { nome, email, telefone } = req.body;
+    const { nome, email, telefone } = req.body ?? {};
 
     const cliente = new Cliente(nome, email ?? "", telefone ?? "");
     await service.atualizar(Number(req.params.id), cliente);

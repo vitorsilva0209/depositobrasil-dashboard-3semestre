@@ -8,6 +8,15 @@ import {
   validarSenha,
 } from "../utils/validacoes";
 
+function erroDuplicidadeCadastro(erro: unknown): boolean {
+  return (
+    typeof erro === "object" &&
+    erro !== null &&
+    "code" in erro &&
+    erro.code === "ER_DUP_ENTRY"
+  );
+}
+
 export interface DadosRegistro {
   nome: string;
   email: string;
@@ -93,12 +102,26 @@ export class AuthService {
 
     const senhaHash = await bcrypt.hash(senha, 12);
 
-    const id = await this.usuarioRepository.criar({
-      nome,
-      email,
-      cpf,
-      senha: senhaHash,
-    });
+    let id: number;
+
+    try {
+      id = await this.usuarioRepository.criar({
+        nome,
+        email,
+        cpf,
+        senha: senhaHash,
+      });
+    } catch (erro) {
+      // A checagem prévia melhora a mensagem; a constraint do banco
+      // protege também contra cadastros simultâneos.
+      if (erroDuplicidadeCadastro(erro)) {
+        throw new AppError(
+          "Este e-mail ou CPF já está cadastrado.",
+          409
+        );
+      }
+      throw erro;
+    }
 
     return {
       id,

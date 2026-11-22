@@ -3,12 +3,19 @@
 import { Request, Response, NextFunction } from "express";
 import { Funcionario } from "../models/funcionarioModel";
 import { funcionarioService as service } from "../config/dependencies";
+import { normalizarPaginacao } from "../utils/paginacao";
+import { numeroObrigatorio } from "../utils/numero";
 
 export async function listarFuncionarios(req: Request, res: Response, next: NextFunction) {
   try {
-    const pagina = Math.max(1, Number(req.query.pagina) || 1);
-    const limite = Math.min(100, Math.max(1, Number(req.query.limite) || 10));
-    const busca = String(req.query.busca || "").trim();
+    const { pagina, limite } = normalizarPaginacao(
+      req.query.pagina,
+      req.query.limite,
+      10
+    );
+    const busca = typeof req.query.busca === "string"
+      ? req.query.busca.trim()
+      : "";
 
     const resultado = await service.listarPaginado({ pagina, limite, busca });
 
@@ -36,9 +43,9 @@ export async function buscarFuncionario(req: Request, res: Response, next: NextF
 
 export async function cadastrarFuncionario(req: Request, res: Response, next: NextFunction) {
   try {
-    const { nome, cargo, salario } = req.body;
+    const { nome, cargo, salario } = req.body ?? {};
 
-    const funcionario = new Funcionario(nome, cargo, Number(salario));
+    const funcionario = new Funcionario(nome, cargo, numeroObrigatorio(salario, "o salário"));
     const id = await service.cadastrar(funcionario);
 
     res.status(201).json({
@@ -53,9 +60,9 @@ export async function cadastrarFuncionario(req: Request, res: Response, next: Ne
 
 export async function atualizarFuncionario(req: Request, res: Response, next: NextFunction) {
   try {
-    const { nome, cargo, salario } = req.body;
+    const { nome, cargo, salario } = req.body ?? {};
 
-    const funcionario = new Funcionario(nome, cargo, Number(salario));
+    const funcionario = new Funcionario(nome, cargo, numeroObrigatorio(salario, "o salário"));
     await service.atualizar(Number(req.params.id), funcionario);
 
     res.json({

@@ -3,6 +3,8 @@ import { Request, Response, NextFunction } from "express";
 import { ErroValidacao } from "../errors/AppError";
 import { Venda } from "../models/vendaModel";
 import { vendaService as service } from "../config/dependencies";
+import { normalizarPaginacao } from "../utils/paginacao";
+import { numeroObrigatorio } from "../utils/numero";
 
 function normalizarDataVenda(
   valor: unknown
@@ -69,17 +71,14 @@ export async function listarVendas(
   next: NextFunction
 ) {
   try {
-    const pagina = Math.max(
-      1,
-      Math.floor(Number(req.query.pagina) || 1)
+    const { pagina, limite } = normalizarPaginacao(
+      req.query.pagina,
+      req.query.limite,
+      10
     );
-
-    const limite = Math.min(
-      100,
-      Math.max(1, Math.floor(Number(req.query.limite) || 10))
-    );
-
-    const busca = String(req.query.busca || "").trim();
+    const busca = typeof req.query.busca === "string"
+      ? req.query.busca.trim()
+      : "";
 
     const resultado = await service.listarPaginado({
       pagina,
@@ -136,8 +135,8 @@ export async function cadastrarVenda(
     }
 
     const venda = new Venda(
-      Number(req.body?.produto_id),
-      Number(req.body?.quantidade),
+      numeroObrigatorio(req.body?.produto_id, "o produto"),
+      numeroObrigatorio(req.body?.quantidade, "a quantidade"),
       dataVenda
     );
 
@@ -170,8 +169,8 @@ export async function atualizarVenda(
     }
 
     const venda = new Venda(
-      Number(req.body?.produto_id),
-      Number(req.body?.quantidade),
+      numeroObrigatorio(req.body?.produto_id, "o produto"),
+      numeroObrigatorio(req.body?.quantidade, "a quantidade"),
       dataVenda
     );
 

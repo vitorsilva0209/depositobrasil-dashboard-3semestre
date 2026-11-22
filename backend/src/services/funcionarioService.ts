@@ -71,7 +71,7 @@ export class FuncionarioService {
   }
 
   private validarId(id: number): void {
-    if (!Number.isInteger(id) || id <= 0) {
+    if (!Number.isSafeInteger(id) || id <= 0) {
       throw new ErroValidacao("ID do funcionário inválido.");
     }
   }
