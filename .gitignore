@@ -12,3 +12,13 @@ frontend/.env
 
 
 deposito_brasil (2).sql
+
+# Arquivos temporarios de revisao
+backup-revisao-*/
+codigo-backend-frontend-revisao/
+codigo-backend-frontend-revisao.zip
+correcoes-backend-frontend/
+correcoes-backend-frontend-ajustado.zip
+diagnostico-backend-frontend.txt
+revisao-*.txt
+revisao-*.zip
